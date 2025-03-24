@@ -1,4 +1,4 @@
-# LaMAR   |   *Label based Modality Agnostic Registration*
+# LAMAR   |   *Label Augmented Modality Agnostic Registration*
 
 <div align="left">
   
