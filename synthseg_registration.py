@@ -63,7 +63,7 @@ def synthseg_registration(input_image, reference_image, output_image, output_dir
         ], check=True)
         
         subprocess.run([
-            "micaflow", "synthseg",
+            "python", "synthseg.py",
             "--i", reference_image,
             "--o", reference_parc,
             "--parc",
@@ -73,7 +73,7 @@ def synthseg_registration(input_image, reference_image, output_image, output_dir
         # Step 2: Register parcellations using coregister
         print("\n--- Step 2: Coregistering parcellated images ---")
         subprocess.run([
-            "micaflow", "coregister",
+            "python", "coregister.py",
             "--fixed-file", reference_parc,
             "--moving-file", input_parc,
             "--output", os.path.join(output_dir, "registered_parcellation.nii.gz"),
@@ -86,7 +86,7 @@ def synthseg_registration(input_image, reference_image, output_image, output_dir
         # Step 3: Apply transformation to the original input image
         print("\n--- Step 3: Applying transformation to original input image ---")
         subprocess.run([
-            "micaflow", "apply_warp",
+            "python", "apply_warp.py",
             "--moving", input_image,
             "--reference", reference_image,
             "--affine", affine_transform,
