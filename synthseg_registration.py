@@ -59,7 +59,8 @@ def synthseg_registration(input_image, reference_image, output_image, output_dir
             "--i", input_image,
             "--o", input_parc,
             "--parc",
-            "--cpu"
+            "--cpu",
+            "--threads", "1"
         ], check=True)
         
         subprocess.run([
@@ -67,7 +68,8 @@ def synthseg_registration(input_image, reference_image, output_image, output_dir
             "--i", reference_image,
             "--o", reference_parc,
             "--parc",
-            "--cpu"
+            "--cpu",
+            "--threads", "1"
         ], check=True)
         
         # Step 2: Register parcellations using coregister
