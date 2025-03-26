@@ -55,7 +55,7 @@ def synthseg_registration(input_image, reference_image, output_image, output_dir
         # Step 1: Generate parcellations with SynthSeg
         print("\n--- Step 1: Generating brain parcellations with SynthSeg ---")
         subprocess.run([
-            "micaflow", "synthseg",
+            "python", "synthseg.py",
             "--i", input_image,
             "--o", input_parc,
             "--parc",
