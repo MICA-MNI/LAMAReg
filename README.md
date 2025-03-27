@@ -14,7 +14,7 @@ We introduced a novel approach for more accurate registration between modalities
 
 To run the script, use the command line interface here:
 ```bash
-python synthseg_registration.py --input testdata/sub-HC001_ses-01_T1w.nii.gz --reference sub-HC001_ses-02_T1w.nii --output "registered.nii.gz" --workdir workdir
+python synthseg_registration.py --input testdata/sub-HC001_ses-01_T1w.nii.gz --reference testdata/sub-HC001_ses-02_T1w.nii --output "registered.nii.gz" --workdir workdir
 ```
 ### Prerequisites
 
