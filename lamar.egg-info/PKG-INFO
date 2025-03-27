@@ -1,0 +1,108 @@
+Metadata-Version: 2.2
+Name: lamar
+Version: 0.1.0
+Summary: Label Augmented Modality Agnostic Registration
+Home-page: https://github.com/yourusername/LaMAR
+Author: Ian Goodall-Halliwell
+Author-email: gooodallhalliwell@gmail.com
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: absl-py==2.2.1
+Requires-Dist: antspyx==0.5.4
+Requires-Dist: astunparse==1.6.3
+Requires-Dist: certifi==2025.1.31
+Requires-Dist: charset-normalizer==3.4.1
+Requires-Dist: colorama==0.4.6
+Requires-Dist: contourpy==1.3.1
+Requires-Dist: cycler==0.12.1
+Requires-Dist: flatbuffers==25.2.10
+Requires-Dist: fonttools==4.56.0
+Requires-Dist: gast==0.6.0
+Requires-Dist: google-pasta==0.2.0
+Requires-Dist: grpcio==1.71.0
+Requires-Dist: h5py==3.13.0
+Requires-Dist: idna==3.10
+Requires-Dist: importlib_resources==6.5.2
+Requires-Dist: keras==3.9.0
+Requires-Dist: kiwisolver==1.4.8
+Requires-Dist: libclang==18.1.1
+Requires-Dist: Markdown==3.7
+Requires-Dist: markdown-it-py==3.0.0
+Requires-Dist: MarkupSafe==3.0.2
+Requires-Dist: matplotlib==3.10.1
+Requires-Dist: mdurl==0.1.2
+Requires-Dist: ml_dtypes==0.5.1
+Requires-Dist: namex==0.0.8
+Requires-Dist: nibabel==5.3.2
+Requires-Dist: numpy==2.0.1
+Requires-Dist: opt_einsum==3.4.0
+Requires-Dist: optree==0.14.1
+Requires-Dist: packaging==24.2
+Requires-Dist: pandas==2.2.3
+Requires-Dist: patsy==1.0.1
+Requires-Dist: pillow==11.1.0
+Requires-Dist: protobuf==5.29.4
+Requires-Dist: Pygments==2.19.1
+Requires-Dist: pyparsing==3.2.3
+Requires-Dist: python-dateutil==2.9.0.post0
+Requires-Dist: pytz==2025.2
+Requires-Dist: PyYAML==6.0.2
+Requires-Dist: requests==2.32.3
+Requires-Dist: rich==13.9.4
+Requires-Dist: scipy==1.15.2
+Requires-Dist: six==1.17.0
+Requires-Dist: statsmodels==0.14.4
+Requires-Dist: tensorboard==2.19.0
+Requires-Dist: tensorboard-data-server==0.7.2
+Requires-Dist: tensorflow==2.19.0
+Requires-Dist: tensorflow-io-gcs-filesystem==0.31.0
+Requires-Dist: termcolor==2.5.0
+Requires-Dist: typing_extensions==4.13.0
+Requires-Dist: tzdata==2025.2
+Requires-Dist: urllib3==2.3.0
+Requires-Dist: webcolors==24.11.1
+Requires-Dist: Werkzeug==3.1.3
+Requires-Dist: wrapt==1.17.2
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
+
+# LAMAR   |   *Label Augmented Modality Agnostic Registration*
+
+<div align="left">
+  
+![License](https://img.shields.io/badge/license-BSD-brightgreen) [![Version](https://img.shields.io/github/v/tag/LaMAR/z-brains)](https://github.com/MICA-MNI/LaMAR) [![GitHub issues](https://img.shields.io/github/issues/MICA-MNI/LaMAR?color=brightgreen)](https://github.com/MICA-MNI/LaMAR/issues) [![GitHub stars](https://img.shields.io/github/stars/MICA-MNI/LaMAR.svg?style=flat&label=%E2%AD%90%EF%B8%8F%20stars&color=brightgreen)](https://github.com/MICA-MNI/LaMAR/stargazers)
+  
+</div>
+
+We introduced a novel approach for more accurate registration between modalities. This python based workflow combines deep learning-based segmentation and numerical solutions (ANTs) to generate precise warpfields, even for modalities with low signal-to-noise ratio, signal dropout and strong geometric distortions, such as diffusion MRI and fMRI acquisitions. 
+
+![lamar_workflow](docs/workflow.png)
+
+### How to run test
+
+To run the script, use the command line interface here:
+```bash
+python synthseg_registration.py --input testdata/sub-HC001_ses-01_T1w.nii.gz --reference testdata/sub-HC001_ses-02_T1w.nii --output "registered.nii.gz" --workdir workdir
+```
+### Prerequisites
+
+- Python 3.10
+
+```bash
+pip install lamar
+```
+
+### References
+> 1.	Billot, Benjamin, et al. "Robust machine learning segmentation for large-scale analysis of heterogeneous clinical brain MRI datasets." Proceedings of the National Academy of Sciences 120.9 (2023): e2216399120.
+> 1.	Avants, Brian B., Nick Tustison, and Gang Song. "Advanced normalization tools (ANTS)." Insight j 2.365 (2009): 1-35.
+

@@ -1,0 +1,2 @@
+[console_scripts]
+lamar = lamar.cli:main
