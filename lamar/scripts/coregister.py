@@ -3,10 +3,10 @@ coregister - Image Registration for Aligning Neuroimaging Data
 
 Part of the micaflow processing pipeline for neuroimaging data.
 
-This module performs comprehensive image registration between two images using the 
-Advanced Normalization Tools (ANTs) SyNRA algorithm, which combines rigid, affine, 
-and symmetric normalization transformations. It aligns a moving image with a fixed 
-reference space, enabling spatial normalization of neuroimaging data for group analysis, 
+This module performs comprehensive image registration between two images using the
+Advanced Normalization Tools (ANTs) SyNRA algorithm, which combines rigid, affine,
+and symmetric normalization transformations. It aligns a moving image with a fixed
+reference space, enabling spatial normalization of neuroimaging data for group analysis,
 multimodal integration, or atlas-based analyses.
 
 Features:
@@ -19,7 +19,7 @@ Features:
 
 API Usage:
 ---------
-micaflow coregister 
+micaflow coregister
     --fixed-file <path/to/reference.nii.gz>
     --moving-file <path/to/source.nii.gz>
     --output <path/to/registered.nii.gz>
@@ -50,6 +50,7 @@ from colorama import init, Fore, Style
 
 init()
 
+
 def print_help_message():
     """Print a help message with examples."""
     # ANSI color codes
@@ -60,36 +61,36 @@ def print_help_message():
     MAGENTA = Fore.MAGENTA
     BOLD = Style.BRIGHT
     RESET = Style.RESET_ALL
-    
+
     help_text = f"""
     {CYAN}{BOLD}╔════════════════════════════════════════════════════════════════╗
     ║                      IMAGE COREGISTRATION                      ║
     ╚════════════════════════════════════════════════════════════════╝{RESET}
-    
+
     This script performs linear (rigid + affine) and nonlinear (SyN) registration 
     between two images using ANTs. The registration aligns the moving image to 
     match the fixed reference image space.
-    
+
     {CYAN}{BOLD}────────────────────────── USAGE ──────────────────────────{RESET}
       micaflow coregister {GREEN}[options]{RESET}
-    
+
     {CYAN}{BOLD}─────────────────── REQUIRED ARGUMENTS ───────────────────{RESET}
       {YELLOW}--fixed-file{RESET}   : Path to the fixed/reference image (.nii.gz)
       {YELLOW}--moving-file{RESET}  : Path to the moving image to be registered (.nii.gz)
       {YELLOW}--output{RESET}       : Output path for the registered image (.nii.gz)
-    
+
     {CYAN}{BOLD}─────────────────── OPTIONAL ARGUMENTS ───────────────────{RESET}
       {YELLOW}--warp-file{RESET}      : Path to save the forward warp field (.nii.gz)
       {YELLOW}--affine-file{RESET}    : Path to save the forward affine transform (.mat)
       {YELLOW}--rev-warp-file{RESET}  : Path to save the reverse warp field (.nii.gz)
       {YELLOW}--rev-affine-file{RESET}: Path to save the reverse affine transform (.mat)
-    
+
     {CYAN}{BOLD}────────────────── EXAMPLE USAGE ────────────────────────{RESET}
-    
+
     {BLUE}# Register a moving image to a fixed image{RESET}
     micaflow coregister {YELLOW}--fixed-file{RESET} mni152.nii.gz {YELLOW}--moving-file{RESET} subject_t1w.nii.gz \\
       {YELLOW}--output{RESET} registered_t1w.nii.gz {YELLOW}--warp-file{RESET} warp.nii.gz {YELLOW}--affine-file{RESET} affine.mat
-    
+
     {CYAN}{BOLD}────────────────────────── NOTES ───────────────────────{RESET}
     {MAGENTA}•{RESET} The registration performs SyNRA transformation (rigid+affine+SyN)
     {MAGENTA}•{RESET} Forward transforms convert from moving space to fixed space
@@ -100,35 +101,36 @@ def print_help_message():
 
 
 def ants_linear_nonlinear_registration(
-    fixed_file,
-    moving_file,
-    out_file="registered_image.nii",
-    warp_file=None,
-    affine_file=None,
-    rev_warp_file=None,
-    rev_affine_file=None,
+        fixed_file,
+        moving_file,
+        out_file="registered_image.nii",
+        warp_file=None,
+        affine_file=None,
+        rev_warp_file=None,
+        rev_affine_file=None,
+        registration_method="SyNRA"
 ):
     """Perform linear (rigid + affine) and nonlinear registration using ANTsPy.
-    
-    This function performs registration between two images using ANTs' SyNRA transform, 
-    which includes both linear (rigid + affine) and nonlinear (SyN) components. 
-    The registered image is saved to the specified output path, and the transform 
+
+    This function performs registration between two images using ANTs' SyNRA transform,
+    which includes both linear (rigid + affine) and nonlinear (SyN) components.
+    The registered image is saved to the specified output path, and the transform
     files can optionally be saved as well.
-    
+
     Args:
         fixed_file (str): Path to the fixed/reference image.
         moving_file (str): Path to the moving image that will be registered.
-        out_file (str, optional): Path where the registered image will be saved. 
+        out_file (str, optional): Path where the registered image will be saved.
             Defaults to "registered_image.nii".
-        warp_file (str, optional): Path to save the forward warp field. 
+        warp_file (str, optional): Path to save the forward warp field.
             Defaults to None.
-        affine_file (str, optional): Path to save the forward affine transform. 
+        affine_file (str, optional): Path to save the forward affine transform.
             Defaults to None.
-        rev_warp_file (str, optional): Path to save the reverse warp field. 
+        rev_warp_file (str, optional): Path to save the reverse warp field.
             Defaults to None.
-        rev_affine_file (str, optional): Path to save the reverse affine transform. 
+        rev_affine_file (str, optional): Path to save the reverse affine transform.
             Defaults to None.
-            
+
     Returns:
         None: The function saves the registered image and transform files to disk
         but does not return any values.
@@ -138,11 +140,12 @@ def ants_linear_nonlinear_registration(
     moving = ants.image_read(moving_file)
 
     # 'SyN' transform includes both linear and nonlinear registration.
-    transforms = ants.registration(fixed=fixed, moving=moving, type_of_transform="SyNRA")  
+    transforms = ants.registration(fixed=fixed, moving=moving, type_of_transform=registration_method)
 
     # The result of the registration is a dictionary containing, among other keys:
-    registered = ants.apply_transforms(fixed=fixed, moving=moving, transformlist=transforms["fwdtransforms"], interpolator="nearestNeighbor")
-    
+    registered = ants.apply_transforms(fixed=fixed, moving=moving, transformlist=transforms["fwdtransforms"],
+                                       interpolator="nearestNeighbor")
+
     # Save the registered moving image
     ants.image_write(registered, out_file)
     print(f"Registration complete. Saved registered image as {out_file}")
@@ -162,12 +165,13 @@ def ants_linear_nonlinear_registration(
         shutil.copyfile(transforms["invtransforms"][0], rev_affine_file)
         print(f"Saved reverse affine transform as {rev_affine_file}")
 
+
 if __name__ == "__main__":
     # Check if no arguments were provided or help was requested
     if len(sys.argv) == 1 or "-h" in sys.argv or "--help" in sys.argv:
         print_help_message()
         sys.exit(0)
-    
+
     parser = argparse.ArgumentParser(
         description="Run linear + nonlinear (SyN) registration using ANTsPy."
     )
@@ -197,6 +201,11 @@ if __name__ == "__main__":
         default=None,
         help="Optional path to save the reverse affine transform.",
     )
+    parser.add_argument(
+        "--registration-method",
+        default="SyNRA",
+        help="Registration method (default: SyNRA)"
+    )
     args = parser.parse_args()
 
     ants_linear_nonlinear_registration(
@@ -207,4 +216,5 @@ if __name__ == "__main__":
         affine_file=args.affine_file,
         rev_warp_file=args.rev_warp_file,
         rev_affine_file=args.rev_affine_file,
+        registration_method=args.registration_method
     )
