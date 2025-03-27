@@ -20,7 +20,7 @@ import subprocess
 import sys
 
 
-def synthseg_registration(input_image, reference_image, output_image, output_dir=None):
+def synthseg_registration(input_image, reference_image, output_image, output_dir=None, input_parc=None, reference_parc=None, output_parc=None, generate_warpfield=False, apply_warpfield=False, registration_method="SyNRA"):
     """
     Perform contrast-agnostic registration using SynthSeg parcellation.
     
@@ -105,16 +105,27 @@ def synthseg_registration(input_image, reference_image, output_image, output_dir
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Contrast-agnostic registration using SynthSeg")
-    parser.add_argument("--input", required=True, help="Input image to be registered")
-    parser.add_argument("--reference", required=True, help="Reference image (target space)")
+    parser.add_argument("--moving", required=True, help="Input moving image to be registered")
+    parser.add_argument("--fixed", required=True, help="Reference fixed image (target space)")
     parser.add_argument("--output", required=True, help="Output registered image")
     parser.add_argument("--workdir", help="Directory for intermediate files (default: current directory)")
-    
+    parser.add_argument("--moving-parc", help="Input moving parcellation")
+    parser.add_argument("--fixed-parc", help="Reference fixed parcellation")
+    parser.add_argument("--output-parc", help="Output registered parcellation")
+    parser.add_argument("--generate-warpfield", action="store_true", help="Generate warp field for registration")
+    parser.add_argument("--apply-warpfield", action="store_true", help="Apply warp field to moving image")
+    parser.add_argument("--registration-method", default="SyNRA", help="Registration method")
     args = parser.parse_args()
     
     synthseg_registration(
         input_image=args.input,
         reference_image=args.reference,
         output_image=args.output,
-        output_dir=args.workdir
+        output_dir=args.workdir,
+        input_parc=args.input_parc,
+        reference_parc=args.reference_parc,
+        output_parc=args.output_parc,
+        generate_warpfield=args.generate_warpfield,
+        apply_warpfield=args.apply_warpfield,
+        registration_method=args.registration
     )

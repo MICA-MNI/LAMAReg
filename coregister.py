@@ -156,10 +156,10 @@ def ants_linear_nonlinear_registration(
         shutil.copyfile(transforms["fwdtransforms"][1], affine_file)
         print(f"Saved affine transform as {affine_file}")
     if rev_warp_file:
-        shutil.copyfile(transforms["invtransforms"][0], rev_warp_file)
+        shutil.copyfile(transforms["invtransforms"][1], rev_warp_file)
         print(f"Saved reverse warp field as {rev_warp_file}")
     if rev_affine_file:
-        shutil.copyfile(transforms["invtransforms"][1], rev_affine_file)
+        shutil.copyfile(transforms["invtransforms"][0], rev_affine_file)
         print(f"Saved reverse affine transform as {rev_affine_file}")
 
 if __name__ == "__main__":
