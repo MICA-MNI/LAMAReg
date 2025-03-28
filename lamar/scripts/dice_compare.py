@@ -70,11 +70,61 @@ def dice_score(mask1, mask2):
     return 2.0 * intersection / (size1 + size2)
 
 def compare_parcellations_dice(parc1_path, parc2_path, output_csv_path):
-    parc1 = nib.load(parc1_path).get_fdata().astype(int)
-    parc2 = nib.load(parc2_path).get_fdata().astype(int)
-
+    """
+    Compare two parcellation images and calculate Dice scores for each label.
+    
+    Automatically resamples images to the same space if needed using nearest neighbor
+    interpolation to preserve label values.
+    """
+    # Load the parcellation images with nibabel to check dimensions
+    parc1_img = nib.load(parc1_path)
+    parc2_img = nib.load(parc2_path)
+    
+    # Check if the images are in the same space
+    same_shape = parc1_img.shape == parc2_img.shape
+    same_affine = np.allclose(parc1_img.affine, parc2_img.affine, atol=1e-3)
+    
+    if not (same_shape and same_affine):
+        print("\nWARNING: Images are not in the same space.")
+        print(f"Image 1 shape: {parc1_img.shape}, Image 2 shape: {parc2_img.shape}")
+        print("Resampling to the larger image's space using nearest neighbor interpolation...")
+        
+        # Determine which image has the larger dimensions (by volume)
+        vol1 = np.prod(parc1_img.shape)
+        vol2 = np.prod(parc2_img.shape)
+        
+        # Use ANTs for resampling with nearest neighbor interpolation
+        import ants
+        
+        parc1_ants = ants.image_read(parc1_path)
+        parc2_ants = ants.image_read(parc2_path)
+        
+        if vol1 >= vol2:
+            # Resample parc2 to parc1's space
+            print(f"Resampling {os.path.basename(parc2_path)} to match {os.path.basename(parc1_path)}")
+            resampled = ants.resample_image_to_target(
+                parc2_ants, parc1_ants, interp_type='nearestNeighbor')
+            parc1 = parc1_ants.numpy()
+            parc2 = resampled.numpy()
+        else:
+            # Resample parc1 to parc2's space
+            print(f"Resampling {os.path.basename(parc1_path)} to match {os.path.basename(parc2_path)}")
+            resampled = ants.resample_image_to_target(
+                parc1_ants, parc2_ants, interp_type='nearestNeighbor')
+            parc1 = resampled.numpy()
+            parc2 = parc2_ants.numpy()
+    else:
+        # Images are already in the same space
+        parc1 = parc1_img.get_fdata()
+        parc2 = parc2_img.get_fdata()
+    
+    # Convert to integer type to ensure label values are preserved
+    parc1 = parc1.astype(int)
+    parc2 = parc2.astype(int)
+    
+    # Continue with the existing code
     labels = sorted(set(np.unique(parc1)) | set(np.unique(parc2)))
-    labels = [label for label in labels if label != 0]
+    labels = [label for label in labels if label != 0]  # Exclude background
 
     print(f"\nDice scores per label:\n{'Label':<8}{'Region':<40}{'Dice Score':<10}")
     print("-" * 65)
@@ -91,7 +141,7 @@ def compare_parcellations_dice(parc1_path, parc2_path, output_csv_path):
             print(f"{label:<8}{region:<40}{dice:.4f}")
             writer.writerow([label, region, f"{dice:.4f}"])
 
-    print(f"\n Dice scores with region names saved to: {output_csv_path}")
+    print(f"\nDice scores with region names saved to: {output_csv_path}")
 
 def print_help():
     """Print help message for dice-compare command."""
