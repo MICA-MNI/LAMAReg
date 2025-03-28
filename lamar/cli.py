@@ -9,7 +9,115 @@ import sys
 import os
 from lamar.scripts.lamar import lamareg
 from lamar.scripts import synthseg, coregister, apply_warp
+from colorama import init, Fore, Style
+init()
 
+
+def print_cli_help():
+    """Print a comprehensive help message for the LaMAR CLI."""
+    # ANSI color codes
+    CYAN = Fore.CYAN
+    GREEN = Fore.GREEN
+    YELLOW = Fore.YELLOW
+    BLUE = Fore.BLUE
+    MAGENTA = Fore.MAGENTA
+    BOLD = Style.BRIGHT
+    RESET = Style.RESET_ALL
+
+    help_text = f"""
+    {CYAN}{BOLD}╔════════════════════════════════════════════════════════════════╗
+    ║                             LaMAR                              ║
+    ║             Label Augmented Modality Agnostic Registration     ║
+    ╚════════════════════════════════════════════════════════════════╝{RESET}
+
+    LaMAR provides contrast-agnostic registration between different MRI modalities
+    by using SynthSeg's brain parcellation to enable robust alignment between images
+    with different contrasts (e.g., T1w to T2w, FLAIR to T1w, DWI to T1w).
+
+    {CYAN}{BOLD}────────────────────────── WORKFLOWS ──────────────────────────{RESET}
+    
+    {BLUE}1. FULL REGISTRATION PIPELINE{RESET}
+      Parcellate both input images, register them, and apply the transformation:
+      lamar {GREEN}register{RESET} [options]
+      
+    {BLUE}2. GENERATE WARPFIELD ONLY{RESET}
+      Create warpfields without applying them to the input image:
+      lamar {GREEN}generate-warpfield{RESET} [options]
+      
+    {BLUE}3. APPLY EXISTING WARPFIELD{RESET}
+      Apply previously created warpfields to an input image:
+      lamar {GREEN}apply-warpfield{RESET} [options]
+      
+    {BLUE}4. DIRECT TOOL ACCESS{RESET}
+      Run individual components directly:
+      lamar {GREEN}synthseg{RESET} [options]     : Run SynthSeg brain parcellation
+      lamar {GREEN}coregister{RESET} [options]   : Run ANTs coregistration
+      lamar {GREEN}apply-warp{RESET} [options]   : Apply transformations
+      lamar {GREEN}dice-compare{RESET} [options] : Calculate Dice similarity coefficient
+
+    {CYAN}{BOLD}──────────────────── FULL REGISTRATION ────────────────────{RESET}
+    
+    {BLUE}# Required Arguments:{RESET}
+      {YELLOW}--moving{RESET} PATH         : Input image to be registered
+      {YELLOW}--fixed{RESET} PATH          : Reference image (target space)
+      {YELLOW}--output{RESET} PATH         : Output registered image
+      {YELLOW}--moving-parc{RESET} PATH    : Path for moving image parcellation
+      {YELLOW}--fixed-parc{RESET} PATH     : Path for fixed image parcellation
+      {YELLOW}--registered-parc{RESET} PATH: Path for registered parcellation
+      {YELLOW}--affine{RESET} PATH         : Path for affine transformation
+      {YELLOW}--warpfield{RESET} PATH      : Path for warp field
+      {YELLOW}--inverse-warpfield{RESET} P : Path for inverse warp field
+      {YELLOW}--inverse-affine{RESET} PATH : Path for inverse affine transformation
+      
+    {BLUE}# Optional Arguments:{RESET}
+      {YELLOW}--registration-method{RESET} STR : Registration method (default: SyNRA)
+      {YELLOW}--synthseg-threads{RESET} N      : SynthSeg threads (default: 1)
+      {YELLOW}--ants-threads{RESET} N          : ANTs threads (default: 1)
+      {YELLOW}--qc-csv{RESET} PATH             : Path for QC Dice score CSV file
+
+    {CYAN}{BOLD}────────────────── GENERATE WARPFIELD ────────────────────{RESET}
+    
+    Same arguments as full registration, but without {YELLOW}--output{RESET}
+    
+    {CYAN}{BOLD}─────────────────── APPLY WARPFIELD ──────────────────────{RESET}
+    
+    {BLUE}# Required Arguments:{RESET}
+      {YELLOW}--moving{RESET} PATH      : Input image to transform
+      {YELLOW}--fixed{RESET} PATH       : Reference space image
+      {YELLOW}--output{RESET} PATH      : Output registered image
+      {YELLOW}--warpfield{RESET} PATH   : Path to warp field
+      {YELLOW}--affine{RESET} PATH      : Path to affine transformation
+      
+    {BLUE}# Optional Arguments:{RESET}
+      {YELLOW}--ants-threads{RESET} N   : ANTs threads (default: 1)
+
+    {CYAN}{BOLD}─────────────────── EXAMPLE USAGE ───────────────────────{RESET}
+
+    {BLUE}# Register DWI to T1w:{RESET}
+    lamar {GREEN}register{RESET} {YELLOW}--moving{RESET} sub-001_dwi.nii.gz {YELLOW}--fixed{RESET} sub-001_T1w.nii.gz \\
+      {YELLOW}--output{RESET} sub-001_dwi_in_T1w.nii.gz {YELLOW}--moving-parc{RESET} sub-001_dwi_parc.nii.gz \\
+      {YELLOW}--fixed-parc{RESET} sub-001_T1w_parc.nii.gz {YELLOW}--registered-parc{RESET} sub-001_dwi_reg_parc.nii.gz \\
+      {YELLOW}--affine{RESET} dwi_to_T1w_affine.mat {YELLOW}--warpfield{RESET} dwi_to_T1w_warp.nii.gz \\
+      {YELLOW}--inverse-warpfield{RESET} T1w_to_dwi_warp.nii.gz {YELLOW}--inverse-affine{RESET} T1w_to_dwi_affine.mat \\
+      {YELLOW}--synthseg-threads{RESET} 4 {YELLOW}--ants-threads{RESET} 8
+
+    {BLUE}# Generate parcellations separately:{RESET}
+    lamar {GREEN}synthseg{RESET} {YELLOW}--i{RESET} subject_t1w.nii.gz {YELLOW}--o{RESET} t1w_parcellation.nii.gz {YELLOW}--parc{RESET}
+    lamar {GREEN}synthseg{RESET} {YELLOW}--i{RESET} subject_flair.nii.gz {YELLOW}--o{RESET} flair_parcellation.nii.gz {YELLOW}--parc{RESET}
+
+    {BLUE}# Register using existing parcellations:{RESET}
+    lamar {GREEN}register{RESET} {YELLOW}--moving{RESET} subject_flair.nii.gz {YELLOW}--fixed{RESET} subject_t1w.nii.gz \\
+      {YELLOW}--output{RESET} registered_flair.nii.gz {YELLOW}--moving-parc{RESET} flair_parcellation.nii.gz \\
+      {YELLOW}--fixed-parc{RESET} t1w_parcellation.nii.gz [other arguments...]
+
+    {CYAN}{BOLD}────────────────────────── NOTES ───────────────────────{RESET}
+    {MAGENTA}•{RESET} LaMAR works with any MRI modality combination
+    {MAGENTA}•{RESET} If parcellation files already exist, they will be used directly
+    {MAGENTA}•{RESET} All output files need explicit paths to ensure deterministic behavior
+    {MAGENTA}•{RESET} The transforms can be reused with the apply-warpfield command
+    {MAGENTA}•{RESET} Use dice-compare to evaluate registration quality
+    """
+    print(help_text)
 
 def main():
     """Main entry point for the LaMAR CLI."""
@@ -105,13 +213,18 @@ def main():
         "dice-compare",
         help="Calculate Dice similarity coefficient between two parcellation images"
     )
-    dice_compare_parser.add_argument("--ref", required=True, help="Path to reference parcellation image")
-    dice_compare_parser.add_argument("--reg", required=True, help="Path to registered parcellation image")
-    dice_compare_parser.add_argument("--out", required=True, help="Output CSV file path")
+    dice_compare_parser.add_argument("--ref", help="Path to reference parcellation image")
+    dice_compare_parser.add_argument("--reg", help="Path to registered parcellation image")
+    dice_compare_parser.add_argument("--out", help="Output CSV file path")
     
     # Parse known args, leaving the rest for the subcommands
     args, unknown_args = parser.parse_known_args()
     
+    # Print comprehensive help if no command provided
+    if args.command is None:
+        print_cli_help()
+        sys.exit(0)
+    print(f"Command: {args.command}")
     # Handle command routing
     if args.command == "register":
         lamareg(
@@ -187,9 +300,9 @@ def main():
         # Set ALL required defaults for SynthSeg
         synthseg_args.setdefault('parc', True)
         synthseg_args.setdefault('cpu', True)
-        synthseg_args.setdefault('robust', False)
+        synthseg_args.setdefault('robust', True)
         synthseg_args.setdefault('v1', False)
-        synthseg_args.setdefault('fast', True)
+        synthseg_args.setdefault('fast', False)
         synthseg_args.setdefault('post', None)
         synthseg_args.setdefault('resample', None)
         synthseg_args.setdefault('ct', None)
@@ -226,7 +339,7 @@ def main():
         apply_warp.main()
     elif args.command == "dice-compare":
         from lamar.scripts.dice_compare import compare_parcellations_dice, print_help
-        
+        print("Dice compare")
         if not hasattr(args, 'ref') or not args.ref:
             print_help()
             sys.exit(0)

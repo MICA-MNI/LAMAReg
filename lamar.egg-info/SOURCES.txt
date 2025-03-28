@@ -45,5 +45,6 @@ lamar/ext/neuron/utils.py
 lamar/scripts/__init__.py
 lamar/scripts/apply_warp.py
 lamar/scripts/coregister.py
+lamar/scripts/dice_compare.py
+lamar/scripts/lamar.py
 lamar/scripts/synthseg.py
-lamar/scripts/synthseg_registration.py

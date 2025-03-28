@@ -24,6 +24,9 @@ import csv
 import os
 import argparse
 import sys
+from colorama import init, Fore, Style
+
+init()
 
 # FreeSurfer label-to-region mapping
 FREESURFER_LABELS = {
@@ -92,20 +95,44 @@ def compare_parcellations_dice(parc1_path, parc2_path, output_csv_path):
 
 def print_help():
     """Print help message for dice-compare command."""
-    help_text = """
-    Dice Compare: Calculate Dice Similarity Metrics for Brain Parcellations
-    ---------------------------------------------------------------------
-    
+    # ANSI color codes
+    CYAN = Fore.CYAN
+    GREEN = Fore.GREEN
+    YELLOW = Fore.YELLOW
+    BLUE = Fore.BLUE
+    MAGENTA = Fore.MAGENTA
+    BOLD = Style.BRIGHT
+    RESET = Style.RESET_ALL
+
+    help_text = f"""
+    {CYAN}{BOLD}╔════════════════════════════════════════════════════════════════╗
+    ║                        DICE COMPARISON                         ║
+    ╚════════════════════════════════════════════════════════════════╝{RESET}
+
     This tool compares two brain parcellation images and calculates the Dice 
-    similarity coefficient for each anatomical label.
-    
-    Usage:
-      dice-compare --ref REFERENCE_PARCELLATION --reg REGISTERED_PARCELLATION --out OUTPUT_CSV
-    
-    Required Arguments:
-      --ref PATH          Reference parcellation image
-      --reg PATH          Registered parcellation image to compare
-      --out PATH          Output CSV file for results
+    similarity coefficient for each anatomical label. It provides quantitative 
+    assessment of registration or segmentation accuracy.
+
+    {CYAN}{BOLD}────────────────────────── USAGE ──────────────────────────{RESET}
+      lamar dice-compare {GREEN}[options]{RESET}
+
+    {CYAN}{BOLD}─────────────────── REQUIRED ARGUMENTS ───────────────────{RESET}
+      {YELLOW}--ref{RESET} PATH  : Reference parcellation image (.nii.gz)
+      {YELLOW}--reg{RESET} PATH  : Registered parcellation image to compare (.nii.gz)
+      {YELLOW}--out{RESET} PATH  : Output CSV file for Dice scores (.csv)
+
+    {CYAN}{BOLD}────────────────── EXAMPLE USAGE ────────────────────────{RESET}
+
+    {BLUE}# Calculate Dice scores between reference and registered parcellations{RESET}
+    lamar dice-compare {YELLOW}--ref{RESET} fixed_parc.nii.gz {YELLOW}--reg{RESET} registered_parc.nii.gz \\
+      {YELLOW}--out{RESET} dice_scores.csv
+
+    {CYAN}{BOLD}────────────────────────── NOTES ───────────────────────{RESET}
+    {MAGENTA}•{RESET} Higher Dice scores indicate better spatial overlap between regions
+    {MAGENTA}•{RESET} Scores range from 0 (no overlap) to 1 (perfect overlap)
+    {MAGENTA}•{RESET} Results include label numbers and anatomical region names
+    {MAGENTA}•{RESET} Both FreeSurfer subcortical and Desikan-Killiany cortical regions are supported
+    {MAGENTA}•{RESET} Evaluation is performed for each brain region individually
     """
     print(help_text)
 
