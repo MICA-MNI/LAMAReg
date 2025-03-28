@@ -166,55 +166,31 @@ def ants_linear_nonlinear_registration(
         print(f"Saved reverse affine transform as {rev_affine_file}")
 
 
-if __name__ == "__main__":
-    # Check if no arguments were provided or help was requested
-    if len(sys.argv) == 1 or "-h" in sys.argv or "--help" in sys.argv:
-        print_help()
-        sys.exit(0)
-
-    parser = argparse.ArgumentParser(
-        description="Run linear + nonlinear (SyN) registration using ANTsPy."
-    )
-    parser.add_argument("--fixed-file", required=True, help="Path to the fixed image.")
-    parser.add_argument(
-        "--moving-file", required=True, help="Path to the moving image."
-    )
-    parser.add_argument(
-        "--output", required=True,
-        help="Output path for the registered image.",
-    )
-    parser.add_argument(
-        "--warp-file", default=None, help="Optional path to save the warp field."
-    )
-    parser.add_argument(
-        "--affine-file",
-        default=None,
-        help="Optional path to save the affine transform.",
-    )
-    parser.add_argument(
-        "--rev-warp-file",
-        default=None,
-        help="Optional path to save the reverse warp field.",
-    )
-    parser.add_argument(
-        "--rev-affine-file",
-        default=None,
-        help="Optional path to save the reverse affine transform.",
-    )
-    parser.add_argument(
-        "--registration-method",
-        default="SyNRA",
-        help="Registration method (default: SyNRA)"
-    )
+def main():
+    """Entry point for command-line use"""
+    parser = argparse.ArgumentParser(description="Coregistration tool")
+    parser.add_argument("--fixed-file", required=True, help="Fixed image file path")
+    parser.add_argument("--moving-file", required=True, help="Moving image file path")
+    parser.add_argument("--output", required=True, help="Output image file path")
+    parser.add_argument("--registration-method", default="SyNRA", help="Registration method")
+    parser.add_argument("--affine-file", help="Affine transformation file path")
+    parser.add_argument("--warp-file", help="Warp field file path")
+    parser.add_argument("--rev-warp-file", help="Reverse warp field file path")
+    parser.add_argument("--rev-affine-file", help="Reverse affine transformation file path")
+    
     args = parser.parse_args()
-
+    
+    # Call the coregister function with the parsed arguments
     ants_linear_nonlinear_registration(
-        args.fixed_file,
-        args.moving_file,
+        fixed_file=args.fixed_file,
+        moving_file=args.moving_file,
         out_file=args.output,
-        warp_file=args.warp_file,
+        registration_method=args.registration_method,
         affine_file=args.affine_file,
+        warp_file=args.warp_file,
         rev_warp_file=args.rev_warp_file,
-        rev_affine_file=args.rev_affine_file,
-        registration_method=args.registration_method
+        rev_affine_file=args.rev_affine_file
     )
+
+if __name__ == "__main__":
+    main()

@@ -218,7 +218,7 @@ def lamareg(input_image, reference_image, output_image=None, input_parc=None,
         if not generate_warpfield and output_image is not None:
             print("\n--- Step 3: Applying transformation to original input image ---")
             apply_cmd = [
-                "lamar", "apply_warp",
+                "lamar", "apply-warp",  # Use hyphen instead of underscore
                 "--moving", input_image,
                 "--reference", reference_image,
                 "--output", output_image
