@@ -40,6 +40,7 @@ def main():
                                 help="Number of threads to use for SynthSeg segmentation (default: 1)")
     register_parser.add_argument("--ants-threads", type=int, default=1,
                                 help="Number of threads to use for ANTs registration (default: 1)")
+    register_parser.add_argument("--qc-csv", help="Path for quality control Dice score CSV file")
     
     # WORKFLOW 2: Generate warpfield only
     warpfield_parser = subparsers.add_parser(
@@ -60,6 +61,7 @@ def main():
                                  help="Number of threads to use for SynthSeg segmentation (default: 1)")
     warpfield_parser.add_argument("--ants-threads", type=int, default=1,
                                  help="Number of threads to use for ANTs registration (default: 1)")
+    warpfield_parser.add_argument("--qc-csv", help="Path for quality control Dice score CSV file")
     
     # WORKFLOW 3: Apply existing warpfield
     apply_parser = subparsers.add_parser(
@@ -97,6 +99,15 @@ def main():
         "apply-warp",
         help="Apply transformation to an image directly"
     )
+    
+    # Add the dice-compare parser to the subparsers
+    dice_compare_parser = subparsers.add_parser(
+        "dice-compare",
+        help="Calculate Dice similarity coefficient between two parcellation images"
+    )
+    dice_compare_parser.add_argument("--ref", required=True, help="Path to reference parcellation image")
+    dice_compare_parser.add_argument("--reg", required=True, help="Path to registered parcellation image")
+    dice_compare_parser.add_argument("--out", required=True, help="Output CSV file path")
     
     # Parse known args, leaving the rest for the subcommands
     args, unknown_args = parser.parse_known_args()
@@ -213,6 +224,14 @@ def main():
         # Forward arguments to apply_warp
         sys.argv = [sys.argv[0]] + unknown_args
         apply_warp.main()
+    elif args.command == "dice-compare":
+        from lamar.scripts.dice_compare import compare_parcellations_dice, print_help
+        
+        if not hasattr(args, 'ref') or not args.ref:
+            print_help()
+            sys.exit(0)
+            
+        compare_parcellations_dice(args.ref, args.reg, args.out)
     elif args.command is None:
         parser.print_help()
         sys.exit(0)

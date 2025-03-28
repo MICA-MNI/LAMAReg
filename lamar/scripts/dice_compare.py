@@ -1,4 +1,3 @@
-
 """
  Dice Score Comparison for Brain Parcellation Maps
 
@@ -24,6 +23,7 @@ from collections import defaultdict
 import csv
 import os
 import argparse
+import sys
 
 # FreeSurfer label-to-region mapping
 FREESURFER_LABELS = {
@@ -90,7 +90,32 @@ def compare_parcellations_dice(parc1_path, parc2_path, output_csv_path):
 
     print(f"\n Dice scores with region names saved to: {output_csv_path}")
 
-if __name__ == "__main__":
+def print_help():
+    """Print help message for dice-compare command."""
+    help_text = """
+    Dice Compare: Calculate Dice Similarity Metrics for Brain Parcellations
+    ---------------------------------------------------------------------
+    
+    This tool compares two brain parcellation images and calculates the Dice 
+    similarity coefficient for each anatomical label.
+    
+    Usage:
+      dice-compare --ref REFERENCE_PARCELLATION --reg REGISTERED_PARCELLATION --out OUTPUT_CSV
+    
+    Required Arguments:
+      --ref PATH          Reference parcellation image
+      --reg PATH          Registered parcellation image to compare
+      --out PATH          Output CSV file for results
+    """
+    print(help_text)
+
+def main():
+    """Entry point for command-line use"""
+    # Check if no arguments were provided or help requested
+    if len(sys.argv) == 1 or "-h" in sys.argv or "--help" in sys.argv:
+        print_help()
+        sys.exit(0)
+        
     parser = argparse.ArgumentParser(description="Compute Dice score between two parcellation images.")
     parser.add_argument("--ref", required=True, help="Path to reference parcellation image")
     parser.add_argument("--reg", required=True, help="Path to registered parcellation image")
@@ -98,3 +123,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     compare_parcellations_dice(args.ref, args.reg, args.out)
+
+if __name__ == "__main__":
+    main()

@@ -24,17 +24,101 @@ def lamareg(input_image, reference_image, output_image=None, input_parc=None,
             reference_parc=None, output_parc=None, generate_warpfield=False, apply_warpfield=False,
             registration_method="SyNRA", affine_file=None, warp_file=None,
             inverse_warp_file=None, inverse_affine_file=None, 
-            synthseg_threads=1, ants_threads=1):
+            synthseg_threads=1, ants_threads=1, qc_csv=None):
     """
     Perform contrast-agnostic registration using SynthSeg parcellation.
     """
+    # Validate arguments based on the selected workflow
+    if generate_warpfield and apply_warpfield:
+        raise ValueError("Cannot use both --generate-warpfield and --apply-warpfield at the same time")
+    
+    # Validate input files exist
+    for input_file in [f for f in [input_image, reference_image] if f is not None]:
+        if not os.path.isfile(input_file):
+            raise FileNotFoundError(f"Input file not found: {input_file}")
+    
+    # Validate thread counts
+    if synthseg_threads < 1:
+        raise ValueError(f"Invalid thread count for SynthSeg: {synthseg_threads}. Must be >= 1")
+    if ants_threads < 1:
+        raise ValueError(f"Invalid thread count for ANTs: {ants_threads}. Must be >= 1")
+        
+    # Workflow-specific validation
+    if not apply_warpfield:
+        # Registration or Generate-warpfield workflow
+        if input_image is None:
+            raise ValueError("--moving is required for registration")
+        if reference_image is None:
+            raise ValueError("--fixed is required for registration")
+        if input_parc is None:
+            raise ValueError("--moving-parc is required for registration")
+        if reference_parc is None:
+            raise ValueError("--fixed-parc is required for registration")
+        if output_parc is None:
+            raise ValueError("--registered-parc is required for registration")
+        
+        # For normal registration (not generate-warpfield), output image is required
+        if not generate_warpfield and output_image is None:
+            raise ValueError("--output is required for registration")
+            
+        # If generating warpfield, warn if transform files not specified
+        if affine_file is None:
+            print("Warning: No affine transform file path provided - affine transform will not be saved")
+        if warp_file is None:
+            print("Warning: No warp field file path provided - warp field will not be saved")
+        if inverse_warp_file is None:
+            print("Warning: No inverse warp field file path provided - inverse warp field will not be saved")
+        if inverse_affine_file is None:
+            print("Warning: No inverse affine transform file path provided - inverse affine transform will not be saved")
+    else:
+        # Apply-warpfield workflow
+        if input_image is None:
+            raise ValueError("--moving is required for apply-warpfield")
+        if reference_image is None:
+            raise ValueError("--fixed is required for apply-warpfield")
+        if output_image is None:
+            raise ValueError("--output is required for apply-warpfield")
+        if affine_file is None:
+            raise ValueError("--affine is required for apply-warpfield")
+        if warp_file is None:
+            raise ValueError("--warpfield is required for apply-warpfield")
+        
+        # Validate transform files exist
+        for transform_file in [affine_file, warp_file]:
+            if not os.path.isfile(transform_file):
+                raise FileNotFoundError(f"Transform file not found: {transform_file}")
+    
+    # Add QC CSV validation
+    if not apply_warpfield and not generate_warpfield:
+        # Only relevant for standard registration workflow
+        if qc_csv is None:
+            # No QC CSV path provided, will use default
+            if output_parc is not None:
+                default_qc_path = os.path.splitext(output_parc)[0] + "_dice_scores.csv"
+                print(f"No QC CSV path provided - Dice scores will be saved to: {default_qc_path}")
+        else:
+            # QC CSV path provided, check if directory is writable
+            qc_dir = os.path.dirname(qc_csv)
+            if qc_dir:
+                if os.path.exists(qc_dir):
+                    if not os.access(qc_dir, os.W_OK):
+                        raise PermissionError(f"Cannot write to QC CSV directory: {qc_dir}. Check permissions.")
+                else:
+                    try:
+                        os.makedirs(qc_dir, exist_ok=True)
+                    except Exception as e:
+                        raise PermissionError(f"Cannot create QC CSV directory: {qc_dir}. Error: {e}")
+
     # Create directories for all output files
     for file_path in [output_image, input_parc, reference_parc, output_parc, 
-                     affine_file, warp_file, inverse_warp_file, inverse_affine_file]:
+                     affine_file, warp_file, inverse_warp_file, inverse_affine_file, qc_csv]:
         if file_path is not None:
             output_dir = os.path.dirname(file_path)
             if output_dir:  # Only try to create if there's a directory part
-                os.makedirs(output_dir, exist_ok=True)
+                try:
+                    os.makedirs(output_dir, exist_ok=True)
+                except PermissionError:
+                    raise PermissionError(f"Cannot create output directory: {output_dir}. Check permissions.")
                 
     print(f"Processing input image: {input_image}")
     print(f"Reference image: {reference_image}")
@@ -110,6 +194,25 @@ def lamareg(input_image, reference_image, output_image=None, input_parc=None,
                 cmd.extend(["--rev-affine-file", inverse_affine_file])
                 
             subprocess.run(cmd, check=True, env=env)
+            
+            # Run Dice evaluation after coregistration
+            if output_parc is not None and reference_parc is not None:
+                # If qc_csv is not provided, generate a default path based on output_parc
+                dice_output = qc_csv if qc_csv else os.path.splitext(output_parc)[0] + "_dice_scores.csv"
+                
+                print("\n--- Step 2.1: Calculating Dice scores to evaluate registration quality ---")
+                try:
+                    from lamar.scripts.dice_compare import compare_parcellations_dice
+                    compare_parcellations_dice(reference_parc, output_parc, dice_output)
+                    print(f"Quality control metrics saved to: {dice_output}")
+                except FileNotFoundError as e:
+                    print(f"Warning: Could not calculate Dice scores - file not found: {e}", file=sys.stderr)
+                except PermissionError as e:
+                    print(f"Warning: Could not calculate Dice scores - permission error: {e}", file=sys.stderr)
+                except ImportError as e:
+                    print(f"Warning: Could not calculate Dice scores - dice_compare module not found", file=sys.stderr)
+                except Exception as e:
+                    print(f"Warning: Could not calculate Dice scores: {e}", file=sys.stderr)
 
         # WORKFLOW 1 & 3: Apply transformation to the original input image
         if not generate_warpfield and output_image is not None:
@@ -162,6 +265,7 @@ def main():
     parser.add_argument("--registration-method", default="SyNRA", help="Registration method")
     parser.add_argument("--synthseg-threads", type=int, default=1, help="Number of threads to use for SynthSeg segmentation")
     parser.add_argument("--ants-threads", type=int, default=1, help="Number of threads to use for ANTs registration")
+    parser.add_argument("--qc-csv", help="Path for quality control Dice score CSV file")
     
     args = parser.parse_args()
     
@@ -190,7 +294,8 @@ def main():
         inverse_warp_file=args.inverse_warpfield,
         inverse_affine_file=args.inverse_affine,
         synthseg_threads=args.synthseg_threads,
-        ants_threads=args.ants_threads
+        ants_threads=args.ants_threads,
+        qc_csv=args.qc_csv
     )
 
 
