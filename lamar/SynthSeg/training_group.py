@@ -27,17 +27,17 @@ from keras import models
 import keras.layers as KL
 
 # project imports
-from SynthSeg import metrics_model as metrics
-from SynthSeg.training import train_model
-from SynthSeg.brain_generator import BrainGenerator
-from SynthSeg.labels_to_image_model import get_shapes
+from lamar.SynthSeg import metrics_model as metrics
+from lamar.SynthSeg.training import train_model
+from lamar.SynthSeg.brain_generator import BrainGenerator
+from lamar.SynthSeg.labels_to_image_model import get_shapes
 
 # third-party imports
-from ext.lab2im import utils
-from ext.lab2im import layers
-from ext.neuron import models as nrn_models
-from ext.lab2im import edit_tensors as l2i_et
-from ext.lab2im.edit_volumes import get_ras_axes
+from lamar.ext.lab2im import utils
+from lamar.ext.lab2im import layers
+from lamar.ext.neuron import models as nrn_models
+from lamar.ext.lab2im import edit_tensors as l2i_et
+from lamar.ext.lab2im.edit_volumes import get_ras_axes
 
 
 def training(labels_dir,

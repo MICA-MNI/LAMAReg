@@ -21,10 +21,10 @@ import keras.layers as KL
 from keras.models import Model
 
 # third-party imports
-from ext.lab2im import utils
-from ext.lab2im import layers
-from ext.lab2im import edit_tensors as l2i_et
-from ext.lab2im.edit_volumes import get_ras_axes
+from lamar.ext.lab2im import utils
+from lamar.ext.lab2im import layers
+from lamar.ext.lab2im import edit_tensors as l2i_et
+from lamar.ext.lab2im.edit_volumes import get_ras_axes
 
 
 def labels_to_image_model(labels_shape,

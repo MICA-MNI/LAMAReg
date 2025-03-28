@@ -14,7 +14,7 @@ We introduced a novel approach for more accurate registration between modalities
 
 To run the script, use the command line interface here:
 ```bash
-python synthseg_registration.py --input testdata/sub-HC001_ses-01_T1w.nii.gz --reference testdata/sub-HC001_ses-02_T1w.nii --output "registered.nii.gz" --workdir workdir
+lamar register --moving testdata/sub-HC001_ses-02_space-dwi_desc-b0.nii.gz --fixed testdata/sub-HC001_ses-02_T1w.nii --output outputs/sub-HC001_ses-02_space-T1w_desc-b0.nii.gz --moving-parc outputs/sub-HC001_ses-02_space-dwi_desc-b0_parc.nii.gz --fixed-parc outputs/sub-HC001_ses-02_T1w_parc.nii.gz --registered-parc outputs/sub-HC001_ses-02_space-T1w_desc-b0_parc-reg.nii.gz --affine outputs/b0_to_T1w_affine.mat --warpfield outputs/b0_to_T1w_warp.nii.gz --inverse-warpfield outputs/T1w_to_b0_warp.nii.gz --inverse-affine outputs/T1w_to_b0_affine.mat --synthseg-threads 1 --ants-threads 4
 ```
 ### Prerequisites
 

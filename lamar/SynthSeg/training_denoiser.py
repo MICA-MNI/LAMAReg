@@ -22,14 +22,14 @@ from keras import models
 from keras import layers as KL
 
 # project imports
-from SynthSeg import metrics_model as metrics
-from SynthSeg.training import train_model
-from SynthSeg.labels_to_image_model import get_shapes
-from SynthSeg.training_supervised import build_model_inputs
+from lamar.SynthSeg import metrics_model as metrics
+from lamar.SynthSeg.training import train_model
+from lamar.SynthSeg.labels_to_image_model import get_shapes
+from lamar.SynthSeg.training_supervised import build_model_inputs
 
 # third-party imports
-from ext.lab2im import utils, layers
-from ext.neuron import models as nrn_models
+from lamar.ext.lab2im import utils, layers
+from lamar.ext.neuron import models as nrn_models
 
 
 def training(list_paths_input_labels,

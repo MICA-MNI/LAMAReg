@@ -24,8 +24,8 @@ except ImportError:
 
 
 # third-party imports
-from ext.lab2im import utils
-from ext.lab2im import edit_volumes
+from lamar.ext.lab2im import utils
+from lamar.ext.lab2im import edit_volumes
 
 
 def sample_intensity_stats_from_image(image, segmentation, labels_list, classes_list=None, keep_strictly_positive=True):

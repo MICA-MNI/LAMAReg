@@ -21,8 +21,8 @@ from scipy.stats import wilcoxon
 from scipy.ndimage.morphology import distance_transform_edt
 
 # third-party imports
-from ext.lab2im import utils
-from ext.lab2im import edit_volumes
+from lamar.ext.lab2im import utils
+from lamar.ext.lab2im import edit_volumes
 
 
 def fast_dice(x, y, labels):

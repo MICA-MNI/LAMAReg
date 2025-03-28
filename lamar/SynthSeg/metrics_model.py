@@ -21,7 +21,7 @@ import keras.layers as KL
 from keras.models import Model
 
 # third-party imports
-from ext.lab2im import layers
+from lamar.ext.lab2im import layers
 
 
 def metrics_model(input_model, label_list, metrics='dice'):

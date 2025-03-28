@@ -9,7 +9,7 @@ with open("requirements.txt", "r", encoding="utf-8") as f:
 setup(
     name="lamar",
     version="0.1.0",
-    author="Ian Goodall-Halliwell",
+    author="Ian Goodall-Halliwell, Paul Bautin, Nya Yazdi, Kevin Du",
     author_email="gooodallhalliwell@gmail.com",
     description="Label Augmented Modality Agnostic Registration",
     long_description=long_description,

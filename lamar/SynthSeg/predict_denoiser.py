@@ -22,13 +22,13 @@ import keras.layers as KL
 from keras.models import Model
 
 # project imports
-from SynthSeg import evaluate
-from SynthSeg.predict import write_csv, postprocess
+from lamar.SynthSeg import evaluate
+from lamar.SynthSeg.predict import write_csv, postprocess
 
 # third-party imports
-from ext.lab2im import edit_volumes
-from ext.lab2im import utils, layers
-from ext.neuron import models as nrn_models
+from lamar.ext.lab2im import edit_volumes
+from lamar.ext.lab2im import utils, layers
+from lamar.ext.neuron import models as nrn_models
 
 
 def predict(path_predictions,

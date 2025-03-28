@@ -18,10 +18,10 @@ License.
 import os
 
 # project imports
-from SynthSeg.predict_denoiser import predict
+from lamar.SynthSeg.predict_denoiser import predict
 
 # third-party imports
-from ext.lab2im import utils
+from lamar.ext.lab2im import utils
 
 
 def validate_training(prediction_dir,

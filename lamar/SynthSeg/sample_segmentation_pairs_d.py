@@ -22,10 +22,10 @@ from keras import models
 import keras.layers as KL
 
 # third-party imports
-from ext.lab2im import layers as layers
-from ext.lab2im import utils, edit_volumes
-from ext.neuron import models as nrn_models
-from ext.lab2im import edit_tensors as l2i_et
+from lamar.ext.lab2im import layers as layers
+from lamar.ext.lab2im import utils, edit_volumes
+from lamar.ext.neuron import models as nrn_models
+from lamar.ext.lab2im import edit_tensors as l2i_et
 
 
 def sample_segmentation_pairs(image_dir,

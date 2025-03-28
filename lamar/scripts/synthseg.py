@@ -50,7 +50,6 @@ import os
 import sys
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from colorama import init, Fore, Style
-
 init()
 
 def print_extended_help():
@@ -145,6 +144,7 @@ def main(args):
 
   # limit the number of threads to be used if running on CPU
   import tensorflow as tf
+  args['threads'] = int(args['threads'])
   if args['threads'] == 1:
       print('using 1 thread')
   else:
@@ -182,7 +182,7 @@ def main(args):
       args['topology_classes'] = args['topology_classes'].replace('_2.0.npy', '.npy')
       args['n_neutral_labels'] = 18
 
-  from SynthSeg.predict_synthseg import predict
+  from lamar.SynthSeg.predict_synthseg import predict
   # run prediction
   predict(path_images=args['i'],
           path_segmentations=args['o'],

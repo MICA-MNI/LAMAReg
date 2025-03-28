@@ -31,14 +31,14 @@ from keras.optimizers import Adam
 from inspect import getmembers, isclass
 
 # project imports
-from SynthSeg import metrics_model as metrics
+from lamar.SynthSeg import metrics_model as metrics
 
 # third-party imports
-from ext.lab2im import utils
-from ext.lab2im import layers as l2i_layers
-from ext.neuron import utils as nrn_utils
-from ext.neuron import layers as nrn_layers
-from ext.neuron import models as nrn_models
+from lamar.ext.lab2im import utils
+from lamar.ext.lab2im import layers as l2i_layers
+from lamar.ext.neuron import utils as nrn_utils
+from lamar.ext.neuron import layers as nrn_layers
+from lamar.ext.neuron import models as nrn_models
 
 
 def training(list_paths_input_labels,

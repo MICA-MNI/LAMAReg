@@ -29,13 +29,13 @@ from keras.optimizers import Adam
 from inspect import getmembers, isclass
 
 # project imports
-from SynthSeg import metrics_model as metrics
-from SynthSeg.brain_generator import BrainGenerator
+from lamar.SynthSeg import metrics_model as metrics
+from lamar.SynthSeg.brain_generator import BrainGenerator
 
 # third-party imports
-from ext.lab2im import utils, layers
-from ext.neuron import layers as nrn_layers
-from ext.neuron import models as nrn_models
+from lamar.ext.lab2im import utils, layers
+from lamar.ext.neuron import layers as nrn_layers
+from lamar.ext.neuron import models as nrn_models
 
 
 def training(labels_dir,

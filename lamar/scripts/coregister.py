@@ -51,7 +51,7 @@ from colorama import init, Fore, Style
 init()
 
 
-def print_help_message():
+def print_help():
     """Print a help message with examples."""
     # ANSI color codes
     CYAN = Fore.CYAN
@@ -169,7 +169,7 @@ def ants_linear_nonlinear_registration(
 if __name__ == "__main__":
     # Check if no arguments were provided or help was requested
     if len(sys.argv) == 1 or "-h" in sys.argv or "--help" in sys.argv:
-        print_help_message()
+        print_help()
         sys.exit(0)
 
     parser = argparse.ArgumentParser(

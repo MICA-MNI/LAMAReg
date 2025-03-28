@@ -18,11 +18,11 @@ License.
 import numpy as np
 
 # project imports
-from SynthSeg.model_inputs import build_model_inputs
-from SynthSeg.labels_to_image_model import labels_to_image_model
+from lamar.SynthSeg.model_inputs import build_model_inputs
+from lamar.SynthSeg.labels_to_image_model import labels_to_image_model
 
 # third-party imports
-from ext.lab2im import utils, edit_volumes
+from lamar.ext.lab2im import utils, edit_volumes
 
 
 class BrainGenerator:

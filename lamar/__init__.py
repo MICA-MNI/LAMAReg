@@ -2,4 +2,4 @@
 
 __version__ = "0.1.0"
 
-from lamar.scripts.synthseg_registration import synthseg_registration
+from lamar.scripts.lamar import lamareg

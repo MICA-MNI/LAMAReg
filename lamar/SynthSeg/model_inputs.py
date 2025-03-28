@@ -19,7 +19,7 @@ import numpy as np
 import numpy.random as npr
 
 # third-party imports
-from ext.lab2im import utils
+from lamar.ext.lab2im import utils
 
 
 def build_model_inputs(path_label_maps,

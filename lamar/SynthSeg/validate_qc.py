@@ -23,10 +23,10 @@ import matplotlib.pyplot as plt
 from tensorflow.python.summary.summary_iterator import summary_iterator
 
 # project imports
-from SynthSeg.predict_qc import predict
+from lamar.SynthSeg.predict_qc import predict
 
 # third-party imports
-from ext.lab2im import utils
+from lamar.ext.lab2im import utils
 
 
 def validate_training(prediction_dir,
