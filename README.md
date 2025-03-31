@@ -1,23 +1,17 @@
-# LAMAR   |   *Label Augmented Modality Agnostic Registration*
+# LaMAR: Label Augmented Modality Agnostic Registration
 
 <div align="left">
-  
-![License](https://img.shields.io/badge/license-BSD-brightgreen) [![Version](https://img.shields.io/github/v/tag/LaMAR/z-brains)](https://github.com/MICA-MNI/LaMAR) [![GitHub issues](https://img.shields.io/github/issues/MICA-MNI/LaMAR?color=brightgreen)](https://github.com/MICA-MNI/LaMAR/issues) [![GitHub stars](https://img.shields.io/github/stars/MICA-MNI/LaMAR.svg?style=flat&label=%E2%AD%90%EF%B8%8F%20stars&color=brightgreen)](https://github.com/MICA-MNI/LaMAR/stargazers)
-  
+
+[![Version](https://img.shields.io/github/v/tag/LaMAR/z-brains)](https://github.com/MICA-MNI/LaMAR)
+[![GitHub issues](https://img.shields.io/github/issues/MICA-MNI/LaMAR?color=brightgreen)](https://github.com/MICA-MNI/LaMAR/issues)
+[![GitHub stars](https://img.shields.io/github/stars/MICA-MNI/LaMAR.svg?style=flat&label=%E2%AD%90%EF%B8%8F%20stars&color=brightgreen)](https://github.com/MICA-MNI/LaMAR/stargazers)
+![License](https://img.shields.io/badge/license-MIT-brightgreen) 
+
 </div>
 
 We introduced a novel approach for more accurate registration between modalities. This python based workflow combines deep learning-based segmentation and numerical solutions (ANTs) to generate precise warpfields, even for modalities with low signal-to-noise ratio, signal dropout and strong geometric distortions, such as diffusion MRI and fMRI acquisitions. 
 
 ![lamar_workflow](docs/workflow.png)
-
-Collecting workspace information# LaMAR: Label Augmented Modality Agnostic Registration
-
-<div align="left">
-  
-![License](https://img.shields.io/badge/license-MIT-brightgreen) 
-[![GitHub issues](https://img.shields.io/github/issues/MICA-MNI/LaMAR?color=brightgreen)](https://github.com/MICA-MNI/LaMAR/issues)
-
-</div>
 
 ## Overview
 
@@ -251,3 +245,4 @@ This project is licensed under the MIT License.
 - Paul Bautin
 - Nya Yazdi
 - Kevin Du
+- Raul R. Cruces
