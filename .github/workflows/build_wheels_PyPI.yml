@@ -52,7 +52,7 @@ jobs:
           fi
           
           # Create proper wheel filename with platform tag
-          NEW_WHEEL="${WHEEL_BASE}-cp${PY_VERSION}-cp${PY_VERSION}-${PLATFORM_TAG}.whl"
+          NEW_WHEEL="${WHEEL_BASE}-cp310-cp312-${PLATFORM_TAG}.whl"
           
           # Create a directory for platform-specific wheels
           mkdir -p platform_wheels
