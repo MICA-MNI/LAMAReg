@@ -40,5 +40,5 @@ Issues = "https://github.com/MICA-MNI/LAMAR/issues"
 [tool.setuptools]
 packages = ["lamar", "lamar.SynthSeg", "lamar.ext", "lamar.ext.lab2im", 
            "lamar.ext.neuron", "lamar.scripts", "lamar.scripts.data", 
-           "lamar.scripts.data.labels_classes_priors", "lamar.scripts.models"]
+           "lamar.scripts.data.labels_classes_priors"]
 include-package-data = true
