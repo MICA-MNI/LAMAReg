@@ -48,12 +48,35 @@ jobs:
           file_glob: true
           tag: ${{ github.ref }}
           overwrite: true
+
+  # New job to collect and upload all wheels
+  upload_all:
+    name: Upload all wheels to TestPyPI
+    needs: build_wheels  # Wait for all build jobs to complete
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
           
-      # New steps for TestPyPI upload
-      - name: Upload to TestPyPI
-        if: matrix.os == 'ubuntu-latest' # Only upload once per Python version
+      - name: Install dependencies
+        run: pip install twine
+        
+      - name: Download all wheels
+        uses: actions/download-artifact@v4
+        with:
+          path: ./all_wheels
+          pattern: wheels-*
+          merge-multiple: true
+          
+      - name: Display structure
+        run: ls -R ./all_wheels
+        
+      - name: Upload all wheels to TestPyPI
         env:
           TWINE_USERNAME: ${{ secrets.TESTPYPI_USERNAME }}
           TWINE_PASSWORD: ${{ secrets.TESTPYPI_PASSWORD }}
         run: |
-          twine upload --verbose --repository testpypi dist/*.whl
+          twine upload --verbose --repository testpypi ./all_wheels/*.whl
