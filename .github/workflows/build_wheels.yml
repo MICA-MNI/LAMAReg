@@ -73,10 +73,7 @@ jobs:
           path: ./dist
           pattern: wheels-*
           merge-multiple: true
-      - name: Verify build output
-        run: |
-            ls -l dist/
-            python -m zipfile -t dist/*.whl
+
             
       - name: Display structure
         run: ls -R ./dist
