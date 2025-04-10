@@ -138,13 +138,13 @@ All output files require explicit paths to ensure deterministic behavior and pre
 
 ## Example Usage
 
-### Register DWI to T1w:
+### Register DWI to T1w using example data:
 ```bash
-lamar register --moving sub-001_dwi.nii.gz --fixed sub-001_T1w.nii.gz \
-  --output sub-001_dwi_in_T1w.nii.gz --moving-parc sub-001_dwi_parc.nii.gz \
-  --fixed-parc sub-001_T1w_parc.nii.gz --registered-parc sub-001_dwi_reg_parc.nii.gz \
-  --affine dwi_to_T1w_affine.mat --warpfield dwi_to_T1w_warp.nii.gz \
-  --inverse-warpfield T1w_to_dwi_warp.nii.gz --inverse-affine T1w_to_dwi_affine.mat \
+lamar register --moving example_data/sub-HC001_ses-02_space-dwi_desc-b0.nii.gz --fixed example_data/sub-HC001_ses-01_T1w.nii.gz \ 
+  --output output/sub-001_dwi_in_T1w.nii.gz --moving-parc output/sub-001_dwi_parc.nii.gz \
+  --fixed-parc output/sub-001_T1w_parc.nii.gz --registered-parc output/sub-001_dwi_reg_parc.nii.gz \
+  --affine output/dwi_to_T1w_affine.mat --warpfield output/dwi_to_T1w_warp.nii.gz \
+  --inverse-warpfield output/T1w_to_dwi_warp.nii.gz --inverse-affine output/T1w_to_dwi_affine.mat \
   --synthseg-threads 4 --ants-threads 8
 ```
 

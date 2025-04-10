@@ -1,1 +1,2 @@
-lamar/scripts/models/synthseg_robust_2.0.h5
+# Ignore all files in the output directory
+output/
