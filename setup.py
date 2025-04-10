@@ -8,8 +8,8 @@ with open("requirements.txt", "r", encoding="utf-8") as f:
 
 setup(
     name="lamar",
-    version="0.1.0",
-    author="Ian Goodall-Halliwell, Paul Bautin, Nya Yazdi, Kevin Du",
+    version="1.0.0",
+    author="Ian Goodall-Halliwell, Paul Bautin, Nya Yazdi, Kevin Du, Raul R. Cruces",
     author_email="gooodallhalliwell@gmail.com",
     description="Label Augmented Modality Agnostic Registration",
     long_description=long_description,
@@ -18,7 +18,7 @@ setup(
     packages=find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: MIT License",
+        "License :: OSI Approved :: CC-BY-NC License",
         "Operating System :: OS Independent",
     ],
     python_requires=">=3.10",
