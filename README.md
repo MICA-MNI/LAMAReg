@@ -1,11 +1,12 @@
-# LaMAR: Label Augmented Modality Agnostic Registration
+# LAMAR: Label Augmented Modality Agnostic Registration
 
 <div align="left">
 
-[![Version](https://img.shields.io/github/v/tag/LAMAR/)](https://github.com/MICA-MNI/LAMAR)
+[![Version](https://img.shields.io/github/v/tag/MICA-MNI/LAMAR)](https://github.com/MICA-MNI/LAMAR)
+[![PyPI version](https://img.shields.io/pypi/v/LAMAR.svg)](https://pypi.org/project/LAMAR/)
+[![PyPI downloads](https://img.shields.io/pypi/dm/LAMAR.svg)](https://pypi.org/project/LAMAR/)
 [![GitHub issues](https://img.shields.io/github/issues/MICA-MNI/LAMAR?color=brightgreen)](https://github.com/MICA-MNI/LAMAR/issues)
 [![GitHub stars](https://img.shields.io/github/stars/MICA-MNI/LAMAR.svg?style=flat&label=%E2%AD%90%EF%B8%8F%20stars&color=brightgreen)](https://github.com/MICA-MNI/LAMAR/stargazers)
-
 
 </div>
 
@@ -15,7 +16,7 @@ We introduced a novel approach for more accurate registration between modalities
 
 ## Overview
 
-LaMAR provides contrast-agnostic registration between different MRI modalities by using SynthSeg's brain parcellation to enable robust alignment between images with different contrasts (e.g., T1w to T2w, FLAIR to T1w, DWI to T1w).
+LAMAR provides contrast-agnostic registration between different MRI modalities by using SynthSeg's brain parcellation to enable robust alignment between images with different contrasts (e.g., T1w to T2w, FLAIR to T1w, DWI to T1w).
 
 This Python-based workflow combines deep learning-based segmentation (SynthSeg) and numerical optimization (ANTs) to generate precise warpfields, even for modalities with low signal-to-noise ratio, signal dropout, and strong geometric distortions, such as diffusion MRI and fMRI acquisitions.
 
@@ -30,7 +31,7 @@ pip install -e .
 
 ## Workflows
 
-LaMAR offers three main workflows and direct access to individual tools:
+LAMAR offers three main workflows and direct access to individual tools:
 
 ### 1. Full Registration Pipeline
 
@@ -125,7 +126,7 @@ Same arguments as full registration, but without `--output`
 
 ## Argument Parsing Logic
 
-LaMAR uses a subcommand-based CLI structure using the Python `argparse` library. Here's how it works:
+LAMAR uses a subcommand-based CLI structure using the Python `argparse` library. Here's how it works:
 
 1. **Main Parser**: Defines the global command structure with subparsers for each workflow.
 2. **Subparsers**: Each workflow (`register`, `generate-warpfield`, etc.) has its own subparser with specific arguments.
@@ -178,11 +179,11 @@ lamar dice-compare --ref reference_parcellation.nii.gz \
 
 ## Working with Existing Parcellations
 
-LaMAR is designed to work with both new and existing parcellations:
+LAMAR is designed to work with both new and existing parcellations:
 
-1. **Generate New Parcellations**: If you provide paths to non-existing parcellation files, LaMAR will generate them using SynthSeg.
+1. **Generate New Parcellations**: If you provide paths to non-existing parcellation files, LAMAR will generate them using SynthSeg.
 
-2. **Use Existing Parcellations**: If the parcellation files already exist, LaMAR will use them directly without regenerating them.
+2. **Use Existing Parcellations**: If the parcellation files already exist, LAMAR will use them directly without regenerating them.
 
 This flexibility allows you to:
 - Process data end-to-end in a single command
@@ -191,7 +192,7 @@ This flexibility allows you to:
 
 ## Technical Implementation
 
-LaMAR's registration approach consists of three main steps:
+LAMAR's registration approach consists of three main steps:
 
 1. **Brain Parcellation**: SynthSeg generates contrast-agnostic parcellations of both the moving and fixed images.
 2. **Registration**: ANTs registers the parcellations using the SyNRA method (rigid + affine + SyN).
@@ -202,7 +203,7 @@ This approach enables accurate registration between images with different contra
 ## Directory Structure
 
 ```
-LaMAR/
+LAMAR/
 ├── setup.py
 ├── requirements.txt
 ├── README.md
@@ -224,7 +225,7 @@ LaMAR/
 
 ## Notes
 
-- LaMAR works with any MRI modality combination
+- LAMAR works with any MRI modality combination
 - If parcellation files already exist, they will be used directly
 - All output files need explicit paths to ensure deterministic behavior
 - The transforms can be reused with the apply-warpfield command
