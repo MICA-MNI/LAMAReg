@@ -13,6 +13,33 @@ import nibabel as nib
 import shutil
 import time
 import argparse
+import numpy as np
+from scipy.ndimage import zoom
+
+
+def downsample_image(input_path, output_path, factor=4):
+    """Downsample a NIfTI image by the specified factor."""
+    print(f"Downsampling {os.path.basename(input_path)} by factor {factor}...")
+
+    img = nib.load(input_path)
+    data = img.get_fdata()
+    affine = img.affine.copy()
+
+    # Calculate zoom factors for each dimension (inverse of downsample factor)
+    zoom_factor = [1 / factor] * 3
+
+    # Downsample image
+    downsampled_data = zoom(data, zoom_factor, order=1)
+
+    # Adjust affine matrix for the new voxel size
+    scaling = np.diag([factor, factor, factor, 1.0])
+    new_affine = affine @ scaling
+
+    # Create and save the downsampled image
+    new_img = nib.Nifti1Image(downsampled_data, new_affine, img.header)
+    nib.save(new_img, output_path)
+    print(f"Saved downsampled image to {output_path}")
+    return output_path
 
 
 def test_full_pipeline(quick=False):
@@ -24,21 +51,32 @@ def test_full_pipeline(quick=False):
         os.path.dirname(os.path.dirname(__file__)), "example_data"
     )
     output_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "test_output")
+    temp_dir = os.path.join(output_dir, "temp")
 
-    # Create output directory
+    # Create output directories
     os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(temp_dir, exist_ok=True)
 
-    moving_file = os.path.join(example_dir, "sub-HC001_ses-02_space-dwi_desc-b0.nii.gz")
-
-    fixed_file = os.path.join(example_dir, "sub-HC001_ses-01_T1w.nii.gz")
+    # Original image paths
+    orig_moving_file = os.path.join(
+        example_dir, "sub-HC001_ses-02_space-dwi_desc-b0.nii.gz"
+    )
+    orig_fixed_file = os.path.join(example_dir, "sub-HC001_ses-01_T1w.nii.gz")
 
     # Check if example data exists
-    if not os.path.exists(moving_file):
-        print(f"ERROR: Moving image not found: {moving_file}")
+    if not os.path.exists(orig_moving_file):
+        print(f"ERROR: Moving image not found: {orig_moving_file}")
         return False
-    if not os.path.exists(fixed_file):
-        print(f"ERROR: Fixed image not found: {fixed_file}")
+    if not os.path.exists(orig_fixed_file):
+        print(f"ERROR: Fixed image not found: {orig_fixed_file}")
         return False
+
+    # Downsample images
+    moving_file = os.path.join(temp_dir, "moving_downsampled.nii.gz")
+    fixed_file = os.path.join(temp_dir, "fixed_downsampled.nii.gz")
+
+    downsample_image(orig_moving_file, moving_file)
+    downsample_image(orig_fixed_file, fixed_file)
 
     # Define output files
     output_image = os.path.join(output_dir, "sub-001_dwi_in_T1w.nii.gz")
