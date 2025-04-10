@@ -11,7 +11,7 @@
 
 We introduced a novel approach for more accurate registration between modalities. This python based workflow combines deep learning-based segmentation and numerical solutions (ANTs) to generate precise warpfields, even for modalities with low signal-to-noise ratio, signal dropout and strong geometric distortions, such as diffusion MRI and fMRI acquisitions. 
 
-![lamar_workflow](docs/workflow.png)
+![lamar_workflow](https://raw.githubusercontent.com/MICA-MNI/LaMAR/main/docs/workflow.png)
 
 ## Overview
 

@@ -15,8 +15,8 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
-license = "MIT"
-license-files = ["LICEN[CS]E*"]
+license = "CC-BY-NC-4.0"
+license-file = "LICENSE"
 dependencies = [
     "absl-py", "antspyx", "astunparse", "certifi", "charset-normalizer",
     "colorama", "cycler", "flatbuffers", "fonttools", "gast", "google-pasta",
