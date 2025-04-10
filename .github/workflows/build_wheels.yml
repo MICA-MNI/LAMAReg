@@ -27,7 +27,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install build wheel setuptools
+          pip install build wheel setuptools twine
       
       - name: Build package
         run: python -m build
@@ -37,3 +37,23 @@ jobs:
         with:
           name: wheels-${{ matrix.os }}-py${{ matrix.python-version }}
           path: dist/*.whl
+          
+      # New steps for GitHub Release upload
+      - name: Upload to GitHub Release
+        if: github.event_name == 'release'
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: dist/*.whl
+          file_glob: true
+          tag: ${{ github.ref }}
+          overwrite: true
+          
+      # New steps for TestPyPI upload
+      - name: Upload to TestPyPI
+        if: matrix.os == 'ubuntu-latest' # Only upload once per Python version
+        env:
+          TWINE_USERNAME: ${{ secrets.TESTPYPI_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.TESTPYPI_PASSWORD }}
+        run: |
+          twine upload --repository testpypi dist/*.whl
