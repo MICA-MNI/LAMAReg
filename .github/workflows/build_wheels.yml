@@ -29,8 +29,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install build wheel setuptools twine
       
-      - name: Build package
-        run: python -m build
+      - name: Build package with platform tag
+        run: |
+          python -m build
+          # Rename wheel to include platform/Python info
+          mv dist/*.whl dist/lamar-1.0.0-py${{ matrix.python-version }}-${{ matrix.os }}.whl
       
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
