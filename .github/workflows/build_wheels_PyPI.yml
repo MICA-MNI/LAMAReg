@@ -1,0 +1,113 @@
+name: Build and Publish Package
+
+on:
+  workflow_dispatch:  # Manual trigger
+  release:
+    types: [created]
+
+jobs:
+  build_wheels:
+    name: Build wheels on ${{ matrix.os }} for Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.10', '3.11', '3.12']
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+            lfs: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build wheel setuptools twine
+      
+      - name: Build package
+        run: python -m build
+        
+      - name: Convert to proper platform wheel
+        shell: bash
+        run: |
+          # Get Python version without dots (e.g., 310 from 3.10)
+          PY_VERSION=$(echo "${{ matrix.python-version }}" | sed 's/\.//')
+          
+          # Get original wheel name
+          ORIG_WHEEL=$(find dist -name "*.whl")
+          WHEEL_BASE=$(basename "$ORIG_WHEEL" | sed -E 's/-py3-none-any\.whl$//')
+          
+          # Define platform-specific tags
+          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+            PLATFORM_TAG="manylinux_2_17_x86_64"
+          elif [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            PLATFORM_TAG="win_amd64"
+          elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            PLATFORM_TAG="macosx_10_9_x86_64"
+          fi
+          
+          # Create proper wheel filename with platform tag
+          NEW_WHEEL="${WHEEL_BASE}-cp${PY_VERSION}-cp${PY_VERSION}-${PLATFORM_TAG}.whl"
+          
+          # Create a directory for platform-specific wheels
+          mkdir -p platform_wheels
+          
+          # Copy with the new name
+          cp "$ORIG_WHEEL" "platform_wheels/$NEW_WHEEL"
+          echo "Created platform-specific wheel: $NEW_WHEEL"
+          ls -la platform_wheels/
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: platform_wheels/*.whl
+          
+      - name: Upload to GitHub Release
+        if: github.event_name == 'release'
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: platform_wheels/*.whl
+          file_glob: true
+          tag: ${{ github.ref }}
+          overwrite: true
+
+  upload_all:
+    name: Upload all wheels to TestPyPI
+    needs: build_wheels
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          
+      - name: Install dependencies
+        run: pip install twine
+        
+      - name: Download all wheels
+        uses: actions/download-artifact@v4
+        with:
+          path: ./all_wheels
+          pattern: wheels-*
+          merge-multiple: false
+          
+      - name: Prepare for upload
+        run: |
+          mkdir -p dist
+          find ./all_wheels -name "*.whl" -exec cp {} ./dist/ \;
+          ls -la dist/
+          
+      - name: Upload all wheels to TestPyPI
+        env:
+          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+        run: |
+          twine upload --verbose ./dist/*.whl
