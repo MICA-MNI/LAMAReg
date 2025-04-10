@@ -2,16 +2,16 @@
 
 <div align="left">
 
-[![Version](https://img.shields.io/github/v/tag/LaMAR/z-brains)](https://github.com/MICA-MNI/LaMAR)
-[![GitHub issues](https://img.shields.io/github/issues/MICA-MNI/LaMAR?color=brightgreen)](https://github.com/MICA-MNI/LaMAR/issues)
-[![GitHub stars](https://img.shields.io/github/stars/MICA-MNI/LaMAR.svg?style=flat&label=%E2%AD%90%EF%B8%8F%20stars&color=brightgreen)](https://github.com/MICA-MNI/LaMAR/stargazers)
-![License](https://img.shields.io/badge/license-MIT-brightgreen) 
+[![Version](https://img.shields.io/github/v/tag/LAMAR/)](https://github.com/MICA-MNI/LAMAR)
+[![GitHub issues](https://img.shields.io/github/issues/MICA-MNI/LAMAR?color=brightgreen)](https://github.com/MICA-MNI/LAMAR/issues)
+[![GitHub stars](https://img.shields.io/github/stars/MICA-MNI/LAMAR.svg?style=flat&label=%E2%AD%90%EF%B8%8F%20stars&color=brightgreen)](https://github.com/MICA-MNI/LAMAR/stargazers)
+
 
 </div>
 
 We introduced a novel approach for more accurate registration between modalities. This python based workflow combines deep learning-based segmentation and numerical solutions (ANTs) to generate precise warpfields, even for modalities with low signal-to-noise ratio, signal dropout and strong geometric distortions, such as diffusion MRI and fMRI acquisitions. 
 
-![lamar_workflow](https://raw.githubusercontent.com/MICA-MNI/LaMAR/main/docs/workflow.png)
+![lamar_workflow](https://raw.githubusercontent.com/MICA-MNI/LAMAR/main/docs/workflow.png)
 
 ## Overview
 

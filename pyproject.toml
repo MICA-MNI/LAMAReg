@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "LAMAR"
-version = "1.0.0"
+version = "1.0.1"
 authors = [
   { name="Ian Goodall-Halliwell", email="goodallhalliwell@gmail.com" },
 ]

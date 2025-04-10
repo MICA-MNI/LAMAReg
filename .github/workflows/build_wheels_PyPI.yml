@@ -52,7 +52,7 @@ jobs:
           fi
           
           # Create proper wheel filename with platform tag
-          NEW_WHEEL="${WHEEL_BASE}-cp${PY_VERSION}-cp${PY_VERSION}-${PLATFORM_TAG}.whl"
+          NEW_WHEEL="${WHEEL_BASE}-py${PY_VERSION}-py${PY_VERSION}-${PLATFORM_TAG}.whl"
           
           # Create a directory for platform-specific wheels
           mkdir -p platform_wheels
@@ -106,7 +106,6 @@ jobs:
           find ./all_wheels -name "*.whl" -exec cp {} ./dist/ \;
           ls -la dist/
       
-      # New step to upload all wheels together to the GitHub Release
       - name: Upload all wheels to GitHub Release
         if: github.event_name == 'release'
         uses: svenstaro/upload-release-action@v2
@@ -123,4 +122,4 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
         run: |
           echo "Uploading to REAL PyPI - THIS IS NOT A TEST"
-          twine upload --verbose ./dist/*.whl
+          twine upload --verbose --skip-existing ./dist/*.whl
