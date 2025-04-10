@@ -1,0 +1,5 @@
+include README.md
+include requirements.txt
+recursive-include lamar/scripts/models *.h5
+recursive-include lamar/scripts/data *
+recursive-include lamar/scripts/data/labels_classes_priors *

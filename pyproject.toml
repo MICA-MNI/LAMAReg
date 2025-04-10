@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "LAMAR"
+version = "1.0.0"
+authors = [
+  { name="Ian Goodall-Halliwell", email="goodallhalliwell@gmail.com" },
+]
+description = "Label Augmented Modality Agnostic Registration: A Python-based workflow combining deep learning-based segmentation and numerical solutions to generate precise warpfields between different MRI modalities."
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
+dependencies = [
+    "absl-py", "antspyx", "astunparse", "certifi", "charset-normalizer",
+    "colorama", "cycler", "flatbuffers", "fonttools", "gast", "google-pasta",
+    "grpcio", "h5py", "idna", "importlib_resources", "keras", "kiwisolver",
+    "libclang", "markdown", "markdown-it-py", "MarkupSafe", "matplotlib",
+    "mdurl", "namex", "nibabel", "numpy", "opt_einsum", "optree", "packaging",
+    "pandas", "patsy", "pillow", "protobuf", "Pygments", "pyparsing",
+    "python-dateutil", "pytz", "PyYAML", "requests", "rich", "scipy", "six",
+    "statsmodels", "tensorboard", "tensorboard-data-server", "tensorflow",
+    "termcolor", "typing_extensions", "tzdata", "urllib3", "webcolors",
+    "Werkzeug", "wrapt"
+]
+
+[project.scripts]
+lamar = "lamar.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/MICA-MNI/LAMAR"
+Issues = "https://github.com/MICA-MNI/LAMAR/issues"
+
+[tool.setuptools]
+packages = ["lamar", "lamar.SynthSeg", "lamar.ext", "lamar.ext.lab2im", 
+           "lamar.ext.neuron", "lamar.scripts", "lamar.scripts.data", 
+           "lamar.scripts.data.labels_classes_priors", "lamar.scripts.models"]
+include-package-data = true

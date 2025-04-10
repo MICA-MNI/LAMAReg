@@ -14,19 +14,17 @@ setup(
     description="Label Augmented Modality Agnostic Registration",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/LaMAR",
+    url="https://github.com/MICA-MNI/LAMAR",
     packages=find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    python_requires=">=3.8",
+    python_requires=">=3.10",
     install_requires=requirements,
     entry_points={
-        'console_scripts': [
-            'lamar=lamar.cli:main'
-        ],
+        "console_scripts": ["lamar=lamar.cli:main"],
     },
     include_package_data=True,
 )

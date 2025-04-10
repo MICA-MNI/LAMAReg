@@ -1,0 +1,99 @@
+Label,Region,Dice Score
+2,Left cerebral white matter,0.9256
+4,Left lateral ventricle,0.9409
+5,Left inferior lateral ventricle,0.6484
+7,Left cerebellum white matter,0.8323
+8,Left cerebellum cortex,0.8869
+10,Left thalamus,0.9304
+11,Left caudate,0.8780
+12,Left putamen,0.8697
+13,Left pallidum,0.8625
+14,3rd ventricle,0.8092
+15,4th ventricle,0.7891
+16,Brain-stem,0.8951
+17,Left hippocampus,0.9106
+18,Left amygdala,0.9108
+24,CSF,0.7219
+26,Left accumbens area,0.7910
+28,Left ventral DC,0.8691
+41,Right cerebral white matter,0.9306
+43,Right lateral ventricle,0.9410
+44,Right inferior lateral ventricle,0.6560
+46,Right cerebellum white matter,0.8503
+47,Right cerebellum cortex,0.8992
+49,Right thalamus,0.9187
+50,Right caudate,0.8898
+51,Right putamen,0.8584
+52,Right pallidum,0.8170
+53,Right hippocampus,0.8969
+54,Right amygdala,0.8977
+58,Right accumbens area,0.8019
+60,Right ventral DC,0.8706
+1001,Left banks STS,0.8410
+1002,Left caudal anterior cingulate,0.8662
+1003,Left caudal middle frontal,0.8760
+1005,Left cuneus,0.7826
+1006,Left entorhinal,0.8464
+1007,Left fusiform,0.8574
+1008,Left inferior parietal,0.8684
+1009,Left inferior temporal,0.8641
+1010,Left isthmus cingulate,0.8579
+1011,Left lateral occipital,0.8432
+1012,Left lateral orbitofrontal,0.8610
+1013,Left lingual,0.7811
+1014,Left medial orbitofrontal,0.8223
+1015,Left middle temporal,0.8666
+1016,Left parahippocampal,0.8900
+1017,Left paracentral,0.8561
+1018,Left pars opercularis,0.8615
+1019,Left pars orbitalis,0.8031
+1020,Left pars triangularis,0.8464
+1021,Left pericalcarine,0.5453
+1022,Left postcentral,0.8343
+1023,Left posterior cingulate,0.8593
+1024,Left precentral,0.8711
+1025,Left precuneus,0.8576
+1026,Left rostral anterior cingulate,0.8530
+1027,Left rostral middle frontal,0.8689
+1028,Left superior frontal,0.8843
+1029,Left superior parietal,0.8414
+1030,Left superior temporal,0.8559
+1031,Left supramarginal,0.8531
+1032,Left frontal pole,0.7435
+1033,Left temporal pole,0.8500
+1034,Left transverse temporal,0.8254
+1035,Left insula,0.8877
+2001,Right banks STS,0.8113
+2002,Right caudal anterior cingulate,0.8747
+2003,Right caudal middle frontal,0.8790
+2005,Right cuneus,0.7974
+2006,Right entorhinal,0.8603
+2007,Right fusiform,0.8712
+2008,Right inferior parietal,0.8604
+2009,Right inferior temporal,0.8204
+2010,Right isthmus cingulate,0.8848
+2011,Right lateral occipital,0.8460
+2012,Right lateral orbitofrontal,0.8745
+2013,Right lingual,0.8361
+2014,Right medial orbitofrontal,0.8236
+2015,Right middle temporal,0.8429
+2016,Right parahippocampal,0.8548
+2017,Right paracentral,0.8892
+2018,Right pars opercularis,0.8776
+2019,Right pars orbitalis,0.8553
+2020,Right pars triangularis,0.8405
+2021,Right pericalcarine,0.8218
+2022,Right postcentral,0.8502
+2023,Right posterior cingulate,0.8999
+2024,Right precentral,0.8775
+2025,Right precuneus,0.8615
+2026,Right rostral anterior cingulate,0.8361
+2027,Right rostral middle frontal,0.8879
+2028,Right superior frontal,0.8964
+2029,Right superior parietal,0.8483
+2030,Right superior temporal,0.8588
+2031,Right supramarginal,0.8694
+2032,Right frontal pole,0.7653
+2033,Right temporal pole,0.8584
+2034,Right transverse temporal,0.8468
+2035,Right insula,0.9004
