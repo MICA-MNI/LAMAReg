@@ -67,16 +67,20 @@ jobs:
       - name: Download all wheels
         uses: actions/download-artifact@v4
         with:
-          path: ./all_wheels
+          path: ./dist
           pattern: wheels-*
           merge-multiple: true
-          
+      - name: Verify build output
+        run: |
+            ls -l dist/
+            python -m zipfile -t dist/*.whl
+            
       - name: Display structure
-        run: ls -R ./all_wheels
+        run: ls -R ./dist
         
       - name: Upload all wheels to TestPyPI
         env:
           TWINE_USERNAME: ${{ secrets.TESTPYPI_USERNAME }}
           TWINE_PASSWORD: ${{ secrets.TESTPYPI_PASSWORD }}
         run: |
-          twine upload --verbose --repository testpypi ./all_wheels/*.whl
+          twine upload --verbose --repository testpypi ./dist/*.whl
