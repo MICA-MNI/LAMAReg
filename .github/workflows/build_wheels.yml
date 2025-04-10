@@ -56,4 +56,4 @@ jobs:
           TWINE_USERNAME: ${{ secrets.TESTPYPI_USERNAME }}
           TWINE_PASSWORD: ${{ secrets.TESTPYPI_PASSWORD }}
         run: |
-          twine upload --repository --verbose testpypi dist/*.whl
+          twine upload --verbose --repository LAMAR dist/*.whl

@@ -17,7 +17,7 @@ import numpy as np
 from scipy.ndimage import zoom
 
 
-def downsample_image(input_path, output_path, factor=4):
+def downsample_image(input_path, output_path, factor=8):
     """Downsample a NIfTI image by the specified factor."""
     print(f"Downsampling {os.path.basename(input_path)} by factor {factor}...")
 
@@ -134,9 +134,9 @@ def test_full_pipeline(quick=False):
         "--qc-csv",
         qc_csv,
         "--synthseg-threads",
-        "2",  # Lower thread count for CI
+        "1",  # Lower thread count for CI
         "--ants-threads",
-        "2",  # Lower thread count for CI
+        "1",  # Lower thread count for CI
     ]
 
     print("\nRunning LaMAR pipeline...")
