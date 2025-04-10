@@ -17,7 +17,7 @@ import numpy as np
 from scipy.ndimage import zoom
 
 
-def downsample_image(input_path, output_path, factor=8):
+def downsample_image(input_path, output_path, factor=4):
     """Downsample a NIfTI image by the specified factor."""
     print(f"Downsampling {os.path.basename(input_path)} by factor {factor}...")
 
