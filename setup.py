@@ -14,7 +14,7 @@ setup(
     description="Label Augmented Modality Agnostic Registration",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/MICA-MNI/LAMAR",
+    url="https://github.com/MICA-MNI/LAMAReg",
     packages=find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",

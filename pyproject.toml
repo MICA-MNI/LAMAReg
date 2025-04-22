@@ -3,8 +3,8 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "LAMAR"
-version = "1.0.4"
+name = "LAMAReg"
+version = "1.0.0"
 authors = [
   { name="Ian Goodall-Halliwell", email="goodallhalliwell@gmail.com" },
 ]
@@ -34,8 +34,8 @@ dependencies = [
 lamar = "lamar.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/MICA-MNI/LAMAR"
-Issues = "https://github.com/MICA-MNI/LAMAR/issues"
+Homepage = "https://github.com/MICA-MNI/LAMAReg"
+Issues = "https://github.com/MICA-MNI/LAMAReg/issues"
 
 [tool.setuptools]
 packages = ["lamar", "lamar.SynthSeg", "lamar.ext", "lamar.ext.lab2im", 

@@ -1,4 +1,4 @@
-name: Test LaMAR Pipeline
+name: Test LAMAReg Pipeline
 
 on:
   push:
