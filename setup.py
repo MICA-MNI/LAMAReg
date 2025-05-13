@@ -24,7 +24,7 @@ setup(
     python_requires=">=3.10",
     install_requires=requirements,
     entry_points={
-        "console_scripts": ["lamar=lamar.cli:main"],
+        "console_scripts": ["lamar=lamareg.cli:main"],
     },
     include_package_data=True,
 )

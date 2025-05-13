@@ -1,4 +1,4 @@
 include README.md
 include requirements.txt
-recursive-include lamar/scripts/data *
-recursive-include lamar/scripts/data/labels_classes_priors *
+recursive-include lamareg/scripts/data *
+recursive-include lamareg/scripts/data/labels_classes_priors *

@@ -5,3 +5,8 @@ test_output/
 /benchmark_results
 example_data/sub-PNC025_ses-01_space-dwi_desc-b0.nii.gz
 example_data/sub-PNC025_ses-01_space-nativepro_T1w.nii.gz
+/build
+/LAMAReg.egg-info
+/LAMAReg.egg-info
+LAMAReg.egg-info/SOURCES.txt
+LAMAReg.egg-info/PKG-INFO

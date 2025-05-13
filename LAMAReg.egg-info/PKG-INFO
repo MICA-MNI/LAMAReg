@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: LAMAReg
-Version: 1.0.0
+Version: 1.0.1
 Summary: Label Augmented Modality Agnostic Registration: A Python-based workflow combining deep learning-based segmentation and numerical solutions to generate precise warpfields between different MRI modalities.
 Home-page: https://github.com/MICA-MNI/LAMAReg
 Author: Ian Goodall-Halliwell, Paul Bautin, Nya Yazdi, Kevin Du, Raul R. Cruces
