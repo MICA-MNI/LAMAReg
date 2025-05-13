@@ -2,3 +2,6 @@
 output/
 test_output/
 *.h5
+/benchmark_results
+example_data/sub-PNC025_ses-01_space-dwi_desc-b0.nii.gz
+example_data/sub-PNC025_ses-01_space-nativepro_T1w.nii.gz
