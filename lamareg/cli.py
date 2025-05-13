@@ -7,6 +7,8 @@ Command-line interface
 import argparse
 import sys
 import os
+import tempfile
+import shutil
 from lamareg.scripts.lamar import lamareg
 from lamareg.scripts import synthseg, coregister, apply_warp
 from colorama import init, Fore, Style
@@ -166,21 +168,24 @@ def main():
         "--output", required=True, help="Output registered image"
     )
     register_parser.add_argument(
-        "--moving-parc", required=True, help="Output path for moving image parcellation"
+        "--moving-parc",
+        help="Output path for moving image parcellation (optional, will use temp file if not specified)",
     )
     register_parser.add_argument(
-        "--fixed-parc", required=True, help="Output path for fixed image parcellation"
+        "--fixed-parc",
+        help="Output path for fixed image parcellation (optional, will use temp file if not specified)",
     )
     register_parser.add_argument(
         "--registered-parc",
-        required=True,
-        help="Output path for registered parcellation (used for QC)",
+        help="Output path for registered parcellation (optional, will use temp file if not specified)",
     )
     register_parser.add_argument(
-        "--affine", required=True, help="Output path for affine transformation"
+        "--affine",
+        help="Output path for affine transformation (optional, will use temp file if not specified)",
     )
     register_parser.add_argument(
-        "--warpfield", required=True, help="Output path for warp field"
+        "--warpfield",
+        help="Output path for warp field (optional, will use temp file if not specified)",
     )
     register_parser.add_argument(
         "--inverse-warpfield", help="Output path for inverse warp field (optional)"
@@ -222,10 +227,12 @@ def main():
         "--fixed", required=True, help="Reference fixed image"
     )
     warpfield_parser.add_argument(
-        "--moving-parc", required=True, help="Output path for moving image parcellation"
+        "--moving-parc",
+        help="Output path for moving image parcellation (optional, will use temp file if not specified)",
     )
     warpfield_parser.add_argument(
-        "--fixed-parc", required=True, help="Output path for fixed image parcellation"
+        "--fixed-parc",
+        help="Output path for fixed image parcellation (optional, will use temp file if not specified)",
     )
     warpfield_parser.add_argument(
         "--skip-fixed-parc",
@@ -239,13 +246,15 @@ def main():
     )
     warpfield_parser.add_argument(
         "--registered-parc",
-        help="Output path for registered parcellation (optional)",
+        help="Output path for registered parcellation (optional, will use temp file if not specified)",
     )
     warpfield_parser.add_argument(
-        "--affine", help="Output path for affine transformation (optional)"
+        "--affine",
+        help="Output path for affine transformation (optional, will use temp file if not specified)",
     )
     warpfield_parser.add_argument(
-        "--warpfield", help="Output path for warp field (optional)"
+        "--warpfield",
+        help="Output path for warp field (optional, will use temp file if not specified)",
     )
     warpfield_parser.add_argument(
         "--inverse-warpfield", help="Output path for inverse warp field (optional)"
@@ -357,46 +366,145 @@ def main():
 
     # Handle command routing
     if args.command == "register":
-        lamareg(
-            input_image=args.moving,
-            reference_image=args.fixed,
-            output_image=args.output,
-            input_parc=args.moving_parc,
-            reference_parc=args.fixed_parc,
-            output_parc=args.registered_parc,
-            affine_file=args.affine,
-            warp_file=args.warpfield,
-            inverse_warp_file=args.inverse_warpfield,
-            inverse_affine_file=args.inverse_affine,
-            registration_method=args.registration_method,
-            synthseg_threads=args.synthseg_threads,
-            ants_threads=args.ants_threads,
-            skip_fixed_parc=args.skip_fixed_parc,
-            skip_moving_parc=args.skip_moving_parc,
-            skip_qc=args.skip_qc,
-            qc_csv=args.qc_csv,
-        )
+        # Create a temporary directory for files that weren't specified
+        temp_dir = None
+        temp_files = []
+
+        if not all(
+            [
+                args.moving_parc,
+                args.fixed_parc,
+                args.registered_parc,
+                args.affine,
+                args.warpfield,
+            ]
+        ):
+            temp_dir = tempfile.mkdtemp(prefix="lamar_temp_")
+            print(f"Created temporary directory for files: {temp_dir}")
+
+        # Assign temporary paths for missing arguments
+        if not args.moving_parc:
+            args.moving_parc = os.path.join(temp_dir, "moving_parc.nii.gz")
+            temp_files.append(args.moving_parc)
+
+        if not args.fixed_parc:
+            args.fixed_parc = os.path.join(temp_dir, "fixed_parc.nii.gz")
+            temp_files.append(args.fixed_parc)
+
+        if not args.registered_parc:
+            args.registered_parc = os.path.join(temp_dir, "registered_parc.nii.gz")
+            temp_files.append(args.registered_parc)
+
+        if not args.affine:
+            args.affine = os.path.join(temp_dir, "affine.mat")
+            temp_files.append(args.affine)
+
+        if not args.warpfield:
+            args.warpfield = os.path.join(temp_dir, "warpfield.nii.gz")
+            temp_files.append(args.warpfield)
+
+        try:
+            # Run the registration
+            lamareg(
+                input_image=args.moving,
+                reference_image=args.fixed,
+                output_image=args.output,
+                input_parc=args.moving_parc,
+                reference_parc=args.fixed_parc,
+                output_parc=args.registered_parc,
+                affine_file=args.affine,
+                warp_file=args.warpfield,
+                inverse_warp_file=args.inverse_warpfield,
+                inverse_affine_file=args.inverse_affine,
+                registration_method=args.registration_method,
+                synthseg_threads=args.synthseg_threads,
+                ants_threads=args.ants_threads,
+                skip_fixed_parc=args.skip_fixed_parc,
+                skip_moving_parc=args.skip_moving_parc,
+                skip_qc=args.skip_qc,
+                qc_csv=args.qc_csv,
+            )
+
+            # Clean up temporary files after successful completion
+            if temp_dir:
+                print(f"Cleaning up temporary files in {temp_dir}")
+                shutil.rmtree(temp_dir)
+
+        except Exception as e:
+            print(f"Error during registration: {e}", file=sys.stderr)
+            print(f"Temporary files remain in: {temp_dir}")
+            sys.exit(1)
     elif args.command == "generate-warpfield":
-        lamareg(
-            input_image=args.moving,
-            reference_image=args.fixed,
-            output_image=None,  # No output image for generate-warpfield
-            input_parc=args.moving_parc,
-            reference_parc=args.fixed_parc,
-            output_parc=args.registered_parc,
-            affine_file=args.affine,
-            warp_file=args.warpfield,
-            inverse_warp_file=args.inverse_warpfield,
-            inverse_affine_file=args.inverse_affine,
-            generate_warpfield=True,
-            registration_method=args.registration_method,
-            synthseg_threads=args.synthseg_threads,
-            ants_threads=args.ants_threads,
-            skip_fixed_parc=args.skip_fixed_parc,
-            skip_moving_parc=args.skip_moving_parc,
-            skip_qc=args.skip_qc,
-            qc_csv=args.qc_csv,
-        )
+        # Create a temporary directory for files that weren't specified
+        temp_dir = None
+        temp_files = []
+
+        if not all(
+            [
+                args.moving_parc,
+                args.fixed_parc,
+                args.registered_parc,
+                args.affine,
+                args.warpfield,
+            ]
+        ):
+            temp_dir = tempfile.mkdtemp(prefix="lamar_temp_")
+            print(f"Created temporary directory for files: {temp_dir}")
+
+        # Assign temporary paths for missing arguments
+        if not args.moving_parc:
+            args.moving_parc = os.path.join(temp_dir, "moving_parc.nii.gz")
+            temp_files.append(args.moving_parc)
+
+        if not args.fixed_parc:
+            args.fixed_parc = os.path.join(temp_dir, "fixed_parc.nii.gz")
+            temp_files.append(args.fixed_parc)
+
+        if not args.registered_parc:
+            args.registered_parc = os.path.join(temp_dir, "registered_parc.nii.gz")
+            temp_files.append(args.registered_parc)
+
+        if not args.affine:
+            args.affine = os.path.join(temp_dir, "affine.mat")
+            temp_files.append(args.affine)
+
+        if not args.warpfield:
+            args.warpfield = os.path.join(temp_dir, "warpfield.nii.gz")
+            temp_files.append(args.warpfield)
+
+        try:
+            # Run the warpfield generation
+            lamareg(
+                input_image=args.moving,
+                reference_image=args.fixed,
+                output_image=None,  # No output image for generate-warpfield
+                input_parc=args.moving_parc,
+                reference_parc=args.fixed_parc,
+                output_parc=args.registered_parc,
+                affine_file=args.affine,
+                warp_file=args.warpfield,
+                inverse_warp_file=args.inverse_warpfield,
+                inverse_affine_file=args.inverse_affine,
+                generate_warpfield=True,
+                registration_method=args.registration_method,
+                synthseg_threads=args.synthseg_threads,
+                ants_threads=args.ants_threads,
+                skip_fixed_parc=args.skip_fixed_parc,
+                skip_moving_parc=args.skip_moving_parc,
+                skip_qc=args.skip_qc,
+                qc_csv=args.qc_csv,
+            )
+
+            # Clean up temporary files after successful completion
+            if temp_dir:
+                print(f"Cleaning up temporary files in {temp_dir}")
+                shutil.rmtree(temp_dir)
+
+        except Exception as e:
+            print(f"Error during warpfield generation: {e}", file=sys.stderr)
+            if temp_dir:
+                print(f"Temporary files remain in: {temp_dir}")
+            sys.exit(1)
     elif args.command == "apply-warpfield":
         lamareg(
             input_image=args.moving,
