@@ -44,7 +44,6 @@ def run_lamar_registration(
     # Build command for lamar registration
     cmd = [
         "lamar",
-        "register",
         "--moving",
         moving_img,
         "--fixed",

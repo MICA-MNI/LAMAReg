@@ -78,13 +78,13 @@ def print_help():
     {CYAN}{BOLD}─────────────────── REQUIRED ARGUMENTS ───────────────────{RESET}
       {YELLOW}--fixed-file{RESET}   : Path to the fixed/reference image (.nii.gz)
       {YELLOW}--moving-file{RESET}  : Path to the moving image to be registered (.nii.gz)
-      {YELLOW}--output{RESET}       : Output path for the registered image (.nii.gz)
 
     {CYAN}{BOLD}─────────────────── OPTIONAL ARGUMENTS ───────────────────{RESET}
       {YELLOW}--warp-file{RESET}      : Path to save the forward warp field (.nii.gz)
       {YELLOW}--affine-file{RESET}    : Path to save the forward affine transform (.mat)
       {YELLOW}--rev-warp-file{RESET}  : Path to save the reverse warp field (.nii.gz)
       {YELLOW}--rev-affine-file{RESET}: Path to save the reverse affine transform (.mat)
+      {YELLOW}--output{RESET}         : Output path for the registered image (.nii.gz)
 
     {CYAN}{BOLD}────────────────── EXAMPLE USAGE ────────────────────────{RESET}
 
@@ -192,7 +192,7 @@ def main():
     parser = argparse.ArgumentParser(description="Coregistration tool")
     parser.add_argument("--fixed-file", required=True, help="Fixed image file path")
     parser.add_argument("--moving-file", required=True, help="Moving image file path")
-    parser.add_argument("--output", required=True, help="Output image file path")
+    parser.add_argument("--output", help="Output image file path")
     parser.add_argument(
         "--registration-method", default="SyNRA", help="Registration method"
     )

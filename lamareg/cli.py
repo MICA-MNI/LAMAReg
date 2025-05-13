@@ -67,14 +67,18 @@ def print_cli_help():
       {YELLOW}--registered-parc{RESET} PATH: Path for registered parcellation
       {YELLOW}--affine{RESET} PATH         : Path for affine transformation
       {YELLOW}--warpfield{RESET} PATH      : Path for warp field
-      {YELLOW}--inverse-warpfield{RESET} P : Path for inverse warp field
-      {YELLOW}--inverse-affine{RESET} PATH : Path for inverse affine transformation
       
     {BLUE}# Optional Arguments:{RESET}
       {YELLOW}--registration-method{RESET} STR : Registration method (default: SyNRA)
       {YELLOW}--synthseg-threads{RESET} N      : SynthSeg threads (default: 1)
       {YELLOW}--ants-threads{RESET} N          : ANTs threads (default: 1)
       {YELLOW}--qc-csv{RESET} PATH             : Path for QC Dice score CSV file
+      {YELLOW}--inverse-warpfield{RESET} P     : Path for inverse warp field
+      {YELLOW}--inverse-affine{RESET} PATH     : Path for inverse affine transformation
+      {YELLOW}--skip-fixed-parc{RESET}         : Toggle skipping fixed image parcellation
+      {YELLOW}--skip-moving-parc{RESET}        : Toggle skipping moving image parcellation
+      {YELLOW}--skip-qc{RESET}                 : Toggle skipping QC (default: False)
+      
 
     {CYAN}{BOLD}────────────────── GENERATE WARPFIELD ────────────────────{RESET}
     
@@ -95,7 +99,7 @@ def print_cli_help():
     {CYAN}{BOLD}─────────────────── EXAMPLE USAGE ───────────────────────{RESET}
 
     {BLUE}# Register DWI to T1w:{RESET}
-    lamar {GREEN}register{RESET} {YELLOW}--moving{RESET} sub-001_dwi.nii.gz {YELLOW}--fixed{RESET} sub-001_T1w.nii.gz \\
+    lamar {YELLOW}--moving{RESET} sub-001_dwi.nii.gz {YELLOW}--fixed{RESET} sub-001_T1w.nii.gz \\
       {YELLOW}--output{RESET} sub-001_dwi_in_T1w.nii.gz {YELLOW}--moving-parc{RESET} sub-001_dwi_parc.nii.gz \\
       {YELLOW}--fixed-parc{RESET} sub-001_T1w_parc.nii.gz {YELLOW}--registered-parc{RESET} sub-001_dwi_reg_parc.nii.gz \\
       {YELLOW}--affine{RESET} dwi_to_T1w_affine.mat {YELLOW}--warpfield{RESET} dwi_to_T1w_warp.nii.gz \\
@@ -129,6 +133,14 @@ def main():
 
     # Create subparsers for different commands
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
+    # Check if we need to default to "register"
+    if len(sys.argv) > 1 and sys.argv[1].startswith("-"):
+        # The first argument is an option (starts with -), not a command
+        # Insert "register" before the options
+        new_argv = [sys.argv[0], "register"] + sys.argv[1:]
+        print(f"No command specified, defaulting to 'register'")
+        sys.argv = new_argv
+        return main()  # Recursively call main with the modified arguments
 
     # WORKFLOW 1: Full registration pipeline
     register_parser = subparsers.add_parser(
@@ -329,9 +341,20 @@ def main():
 
     # Print comprehensive help if no command provided
     if args.command is None:
-        print_cli_help()
-        sys.exit(0)
-    print(f"Command: {args.command}")
+        # Instead of just showing help, check if we have other arguments
+        if len(sys.argv) > 1:
+            # Insert "register" into the argument list and re-run
+            new_argv = [sys.argv[0], "register"] + sys.argv[1:]
+            print(f"No command specified, defaulting to 'register'")
+            sys.argv = new_argv
+            return main()  # Recursively call main with the new command
+        else:
+            # No arguments at all, show the help
+            print_cli_help()
+            return 0
+    else:
+        print(f"Command: {args.command}")
+
     # Handle command routing
     if args.command == "register":
         lamareg(
