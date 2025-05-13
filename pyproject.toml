@@ -31,14 +31,14 @@ dependencies = [
 ]
 
 [project.scripts]
-lamar = "lamareg.cli:main"
+lamar = "LAMAReg.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/MICA-MNI/LAMAReg"
 Issues = "https://github.com/MICA-MNI/LAMAReg/issues"
 
 [tool.setuptools]
-packages = ["lamareg", "lamareg.SynthSeg", "lamareg.ext", "lamareg.ext.lab2im", 
-           "lamareg.ext.neuron", "lamareg.scripts", "lamareg.scripts.data", 
-           "lamareg.scripts.data.labels_classes_priors", "lamareg.utils"]
+packages = ["LAMAReg", "LAMAReg.SynthSeg", "LAMAReg.ext", "LAMAReg.ext.lab2im", 
+           "LAMAReg.ext.neuron", "LAMAReg.scripts", "LAMAReg.scripts.data", 
+           "LAMAReg.scripts.data.labels_classes_priors", "LAMAReg.utils"]
 include-package-data = true
