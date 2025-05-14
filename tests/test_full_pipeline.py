@@ -134,9 +134,9 @@ def test_full_pipeline(quick=False):
         "--qc-csv",
         qc_csv,
         "--synthseg-threads",
-        "8",  # Lower thread count for CI
+        "1",  # Lower thread count for CI
         "--ants-threads",
-        "8",  # Lower thread count for CI
+        "1",  # Lower thread count for CI
     ]
 
     print("\nRunning LaMAR pipeline...")
