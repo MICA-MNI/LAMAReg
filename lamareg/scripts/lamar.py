@@ -180,29 +180,6 @@ def lamareg(
     env["ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS"] = str(ants_threads)
     env["OMP_NUM_THREADS"] = str(ants_threads)  # OpenMP threads for ANTs
 
-    # Print warnings for transform files that won't be saved
-    if not apply_warpfield:
-        if output_parc is None:
-            print(
-                "Warning: No output parcellation file path provided - coregistered parcellation will not be saved"
-            )
-        if affine_file is None:
-            print(
-                "Warning: No affine transform file path provided - affine transform will not be saved"
-            )
-        if warp_file is None:
-            print(
-                "Warning: No warp field file path provided - warp field will not be saved"
-            )
-        if inverse_warp_file is None:
-            print(
-                "Warning: No inverse warp field file path provided - inverse warp field will not be saved"
-            )
-        if inverse_affine_file is None:
-            print(
-                "Warning: No inverse affine transform file path provided - inverse affine transform will not be saved"
-            )
-
     try:
         # WORKFLOW 1 & 2: Full registration or generate warpfield
         if not apply_warpfield:
