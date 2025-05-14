@@ -9,12 +9,12 @@ using both affine and non-linear (warp field) transformations. It's commonly use
 - Register images across modalities (e.g., T1w to FLAIR)
 - Apply previously calculated transformations to derived images (e.g., segmentations)
 
-The module leverages ANTsPy to apply the transformations in the correct order (warp 
+The module leverages ANTsPy to apply the transformations in the correct order (warp
 field first, then affine) to achieve accurate spatial registration.
 
 API Usage:
 ---------
-micaflow apply_warp 
+micaflow apply_warp
     --moving <path/to/source_image.nii.gz>
     --reference <path/to/target_space.nii.gz>
     --affine <path/to/transform.mat>
@@ -31,22 +31,24 @@ Python Usage:
 ...     moving_img=moving_img,
 ...     reference_img=reference_img,
 ...     affine_file="transform.mat",
-...     warp_file="warpfield.nii.gz", 
+...     warp_file="warpfield.nii.gz",
 ...     out_file="registered_t1w.nii.gz"
 ... )
 
 References:
 ----------
-1. Avants BB, Tustison NJ, Song G, et al. A reproducible evaluation of ANTs 
-   similarity metric performance in brain image registration. NeuroImage. 
+1. Avants BB, Tustison NJ, Song G, et al. A reproducible evaluation of ANTs
+   similarity metric performance in brain image registration. NeuroImage.
    2011;54(3):2033-2044. doi:10.1016/j.neuroimage.2010.09.025
 """
+
 import ants
 import argparse
 import sys
 from colorama import init, Fore, Style
 
 init()
+
 
 def print_help():
     """Print a help message with examples."""
@@ -58,7 +60,7 @@ def print_help():
     MAGENTA = Fore.MAGENTA
     BOLD = Style.BRIGHT
     RESET = Style.RESET_ALL
-    
+
     help_text = f"""
     {CYAN}{BOLD}╔════════════════════════════════════════════════════════════════╗
     ║                        APPLY WARP                              ║
@@ -87,18 +89,20 @@ def print_help():
       followed by the affine transformation.
     {MAGENTA}•{RESET} This is the standard order in ANTs for composite transformations.
     """
-    
+
     print(help_text)
 
 
-def apply_warp(moving_img, reference_img, affine_file, warp_file, out_file):
+def apply_warp(
+    moving_img, reference_img, affine_file, warp_file, out_file, interpolation="linear"
+):
     """Apply an affine transform and a warp field to a moving image.
-    
-    This function takes a moving image and applies both an affine transformation 
-    and a nonlinear warp field to register it to a reference image space. The 
+
+    This function takes a moving image and applies both an affine transformation
+    and a nonlinear warp field to register it to a reference image space. The
     transformation is applied using ANTsPy's apply_transforms function with the
     appropriate transform order.
-    
+
     Parameters
     ----------
     moving_file : str
@@ -111,24 +115,30 @@ def apply_warp(moving_img, reference_img, affine_file, warp_file, out_file):
         Path to the nonlinear warp field (.nii.gz).
     out_file : str
         Path where the transformed image will be saved.
-        
+    interpolation : str, optional
+        Interpolation method to use for the transformation. Default is 'linear'.
+        Other options include 'nearestNeighbor', 'multiLabel', etc.
+
     Returns
     -------
     None
         The function saves the transformed image to the specified output path
         but does not return any values.
-        
+
     Notes
     -----
-    The order of transforms matters: the warp field is applied first, followed 
-    by the affine transformation. This is the standard order in ANTs for 
+    The order of transforms matters: the warp field is applied first, followed
+    by the affine transformation. This is the standard order in ANTs for
     composite transformations.
     """
 
     # The order of transforms in transformlist matters (last Transform will be applied first).
     # Usually you put the nonlinear warp first, then the affine:
     transformed = ants.apply_transforms(
-        fixed=reference_img, moving=moving_img, transformlist=[warp_file, affine_file]
+        fixed=reference_img,
+        moving=moving_img,
+        transformlist=[warp_file, affine_file],
+        interpolator=interpolation,
     )
 
     # Save the transformed image
@@ -161,12 +171,24 @@ def main():
     parser.add_argument(
         "--output", default="warped_image.nii.gz", help="Output warped image filename."
     )
+    parser.add_argument(
+        "--interpolation",
+        default="linear",
+        help="Interpolation method (default: linear).",
+    )
     args = parser.parse_args()
     # Load images and transforms
     moving_img = ants.image_read(args.moving)
     reference_img = ants.image_read(args.reference)
-    
-    apply_warp(moving_img, reference_img, args.affine, args.warp, args.output)
+
+    apply_warp(
+        moving_img,
+        reference_img,
+        args.affine,
+        args.warp,
+        args.output,
+        args.interpolation,
+    )
 
 
 if __name__ == "__main__":

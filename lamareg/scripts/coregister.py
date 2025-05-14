@@ -155,7 +155,7 @@ def ants_linear_nonlinear_registration(
         moving=moving,
         type_of_transform=registration_method,
         # radius_or_number_of_bins=[32, 32, 32],  # Fewer bins for label data
-        interpolator="nearestNeighbor",  # Preserve discrete label values
+        interpolator="genericLabel",  # Preserve discrete label values
         use_histogram_matching=False,  # Not needed for label maps
     )
 
@@ -164,11 +164,11 @@ def ants_linear_nonlinear_registration(
         fixed=fixed,
         moving=moving,
         transformlist=transforms["fwdtransforms"],
-        interpolator="nearestNeighbor",
+        interpolator="genericLabel",
     )
 
     # Save the registered moving image
-    if out_file is None:
+    if out_file is not None:
         ants.image_write(registered, out_file)
         print(f"Registration complete. Saved registered image as {out_file}")
     # If specified, save the transform files
