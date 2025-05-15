@@ -18,6 +18,7 @@ import argparse
 import subprocess
 import nibabel as nib
 import numpy as np
+import torch
 
 
 def run_lamar_registration(
@@ -71,6 +72,8 @@ def run_lamar_registration(
         "--ants-threads",
         str(threads),
         "--skip-qc",
+        # "--skip-fixed-parc",
+        # "--skip-moving-parc",
     ]
 
     # Run LaMAR registration
@@ -153,52 +156,114 @@ def run_direct_ants_registration(
 
 
 def compare_registration_quality(lamar_output, ants_output, fixed_img):
-    """Compare the registration quality between the two methods using normalized mutual information."""
-    # Load images
-    lamar_img = nib.load(lamar_output).get_fdata()
-    ants_img = nib.load(ants_output).get_fdata()
-    fixed_img_data = nib.load(fixed_img).get_fdata()
+    """Compare the registration quality using all available metrics.
 
-    # Calculate normalized mutual information
+    Args:
+        lamar_output: Path to LaMAR registered image
+        ants_output: Path to ANTs registered image
+        fixed_img: Path to fixed reference image
+
+    Returns:
+        Dictionary with results for all metrics
+    """
+    # Load images
+    lamar_img_nib = nib.load(lamar_output)
+    ants_img_nib = nib.load(ants_output)
+    fixed_img_nib = nib.load(fixed_img)
+
+    # Convert to numpy arrays
+    lamar_img_data = lamar_img_nib.get_fdata()
+    ants_img_data = ants_img_nib.get_fdata()
+    fixed_img_data = fixed_img_nib.get_fdata()
+
+    # Convert to PyTorch tensors
+    lamar_tensor = torch.from_numpy(lamar_img_data).float()
+    ants_tensor = torch.from_numpy(ants_img_data).float()
+    fixed_tensor = torch.from_numpy(fixed_img_data).float()
+
+    # Add batch and channel dimensions
+    lamar_tensor = lamar_tensor.unsqueeze(0).unsqueeze(0)
+    ants_tensor = ants_tensor.unsqueeze(0).unsqueeze(0)
+    fixed_tensor = fixed_tensor.unsqueeze(0).unsqueeze(0)
+
+    results = {}
+
+    # Calculate NMI scores (always calculate as fallback)
     def normalized_mutual_information(img1, img2, bins=32):
-        """
-        Calculate normalized mutual information between two images.
-        Higher values indicate better alignment between images.
-        """
-        # Flatten arrays
         img1_flat = img1.flatten()
         img2_flat = img2.flatten()
-
-        # Calculate histograms
         hist_joint, _, _ = np.histogram2d(img1_flat, img2_flat, bins=bins)
         hist_img1 = np.sum(hist_joint, axis=1)
         hist_img2 = np.sum(hist_joint, axis=0)
-
-        # Normalize histograms to get probability distributions
         p_img1 = hist_img1 / np.sum(hist_img1)
         p_img2 = hist_img2 / np.sum(hist_img2)
         p_joint = hist_joint / np.sum(hist_joint)
-
-        # Calculate entropies - handle zero probabilities
         eps = np.finfo(float).eps
         h_img1 = -np.sum(p_img1 * np.log2(p_img1 + eps))
         h_img2 = -np.sum(p_img2 * np.log2(p_img2 + eps))
         h_joint = -np.sum(p_joint * np.log2(p_joint + eps))
-
-        # Calculate normalized mutual information
         return (h_img1 + h_img2) / h_joint if h_joint > 0 else 0
 
-    # Calculate NMI scores
-    lamar_nmi = normalized_mutual_information(lamar_img, fixed_img_data)
-    ants_nmi = normalized_mutual_information(ants_img, fixed_img_data)
+    results["nmi"] = {
+        "lamar": normalized_mutual_information(lamar_img_data, fixed_img_data),
+        "ants": normalized_mutual_information(ants_img_data, fixed_img_data),
+    }
 
-    return lamar_nmi, ants_nmi
+    # Try MIND metric
+    try:
+        from torch_mind import MINDLoss
+
+        mind_loss = MINDLoss(
+            non_local_region_size=7,
+            patch_size=5,
+            neighbor_size=3,
+            gaussian_patch_sigma=2.0,
+        )
+
+        with torch.no_grad():
+            mid_slice = lamar_tensor.shape[2] // 2
+            lamar_mind = -mind_loss(
+                lamar_tensor[:, :, mid_slice, :, :], fixed_tensor[:, :, mid_slice, :, :]
+            ).item()
+            ants_mind = -mind_loss(
+                ants_tensor[:, :, mid_slice, :, :], fixed_tensor[:, :, mid_slice, :, :]
+            ).item()
+
+        results["mind"] = {"lamar": lamar_mind, "ants": ants_mind}
+    except Exception as e:
+        print(f"Error calculating MIND: {e}")
+        results["mind"] = None
+
+    # Try NGF metric
+    try:
+        from normalized_gradient_field import NormalizedGradientField3d
+
+        pixel_spacing = lamar_img_nib.header.get_zooms()[:3]
+
+        ngf = NormalizedGradientField3d(
+            grad_method="default",
+            gauss_sigma=0.5,
+            eps=1e-5,
+            mm_spacing=pixel_spacing,
+            reduction="mean",
+        )
+
+        with torch.no_grad():
+            lamar_ngf = -ngf(lamar_tensor, fixed_tensor).item()
+            ants_ngf = -ngf(ants_tensor, fixed_tensor).item()
+
+        results["ngf"] = {"lamar": lamar_ngf, "ants": ants_ngf}
+    except Exception as e:
+        print(f"Error calculating NGF: {e}")
+        results["ngf"] = None
+
+    return results
 
 
 def main():
     """Run benchmark comparison between LaMAR and direct ANTs registration."""
     parser = argparse.ArgumentParser(
-        description="Compare registration speed between LaMAR and direct ANTs"
+        description="Benchmark LaMAR vs direct ANTs registration"
     )
     parser.add_argument(
         "--moving", required=True, help="Input moving image to be registered"
@@ -220,6 +285,12 @@ def main():
     )
     parser.add_argument(
         "--quiet", action="store_true", help="Suppress registration output"
+    )
+    parser.add_argument(
+        "--quality-metric",
+        default="mind",
+        choices=["mind", "ngf", "nmi"],
+        help="Metric for quality comparison (default: mind)",
     )
 
     args = parser.parse_args()
@@ -279,21 +350,24 @@ def main():
         # Compare quality
         print("\n--- Comparing registration quality ---")
         try:
-            lamar_nmi, ants_nmi = compare_registration_quality(
+            quality_results = compare_registration_quality(
                 lamar_output, ants_output, args.fixed
             )
-            print(
-                f"LaMAR normalized mutual information with fixed image: {lamar_nmi:.4f}"
-            )
-            print(
-                f"Direct ANTs normalized mutual information with fixed image: {ants_nmi:.4f}"
-            )
 
-            print(f"\nQuality difference: {abs(lamar_nmi - ants_nmi):.4f}")
-            if lamar_nmi > ants_nmi:
-                print("LaMAR registration quality is higher")
-            else:
-                print("Direct ANTs registration quality is higher")
+            # Display results for each metric
+            for metric_name, scores in quality_results.items():
+                if scores:
+                    print(f"\n{metric_name.upper()} Metric:")
+                    print(f"  LaMAR: {scores['lamar']:.4f}")
+                    print(f"  ANTs:  {scores['ants']:.4f}")
+
+                    diff = abs(scores["lamar"] - scores["ants"])
+                    print(f"  Difference: {diff:.4f}")
+
+                    if scores["lamar"] > scores["ants"]:
+                        print("  LaMAR registration quality is higher")
+                    else:
+                        print("  Direct ANTs registration quality is higher")
         except Exception as e:
             print(f"Error comparing registration quality: {e}")
 
