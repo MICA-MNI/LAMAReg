@@ -39,8 +39,6 @@ def run_lamar_registration(
     registered_parc = os.path.join(output_dir, "registered_parc.nii.gz")
     affine_file = os.path.join(output_dir, "lamar_affine.mat")
     warp_file = os.path.join(output_dir, "lamar_warp.nii.gz")
-    # inverse_warp = os.path.join(output_dir, "lamar_inverse_warp.nii.gz")
-    # inverse_affine = os.path.join(output_dir, "lamar_inverse_affine.mat")
 
     # Build command for lamar registration
     cmd = [
@@ -61,10 +59,6 @@ def run_lamar_registration(
         affine_file,
         "--warpfield",
         warp_file,
-        # "--inverse-warpfield",
-        # inverse_warp,
-        # "--inverse-affine",
-        # inverse_affine,
         "--registration-method",
         registration_method,
         "--synthseg-threads",
@@ -74,6 +68,7 @@ def run_lamar_registration(
         "--skip-qc",
         # "--skip-fixed-parc",
         # "--skip-moving-parc",
+
     ]
 
     # Run LaMAR registration
@@ -101,10 +96,6 @@ def run_direct_ants_registration(
 
     # Set up output paths
     output_img = os.path.join(output_dir, "direct_ants_registered.nii.gz")
-    # affine_file = os.path.join(output_dir, "direct_ants_affine.mat")
-    # warp_file = os.path.join(output_dir, "direct_ants_warp.nii.gz")
-    # inverse_warp = os.path.join(output_dir, "direct_ants_inverse_warp.nii.gz")
-    # inverse_affine = os.path.join(output_dir, "direct_ants_inverse_affine.mat")
 
     env = os.environ.copy()
     # Set ANTs/ITK thread count
@@ -135,21 +126,6 @@ def run_direct_ants_registration(
 
     # Save outputs
     ants.image_write(registration["warpedmovout"], output_img)
-
-    # # Save transformation files
-    # if "fwdtransforms" in registration and len(registration["fwdtransforms"]) > 0:
-    #     for i, transform in enumerate(registration["fwdtransforms"]):
-    #         if ".mat" in transform:
-    #             shutil.copy(transform, affine_file)
-    #         elif ".nii" in transform:
-    #             shutil.copy(transform, warp_file)
-
-    # if "invtransforms" in registration and len(registration["invtransforms"]) > 0:
-    #     for i, transform in enumerate(registration["invtransforms"]):
-    #         if ".mat" in transform:
-    #             shutil.copy(transform, inverse_affine)
-    #         elif ".nii" in transform:
-    #             shutil.copy(transform, inverse_warp)
 
     elapsed_time = time.time() - start_time
     return elapsed_time, output_img
@@ -211,22 +187,17 @@ def compare_registration_quality(lamar_output, ants_output, fixed_img):
 
     # Try MIND metric
     try:
-        from torch_mind import MINDLoss
+        from torch_mind import MINDLoss3D, MIND3D
 
-        mind_loss = MINDLoss(
-            non_local_region_size=7,
-            patch_size=5,
-            neighbor_size=3,
-            gaussian_patch_sigma=2.0,
+        mind_loss = MINDLoss3D(
         )
 
         with torch.no_grad():
-            mid_slice = lamar_tensor.shape[2] // 2
-            lamar_mind = -mind_loss(
-                lamar_tensor[:, :, mid_slice, :, :], fixed_tensor[:, :, mid_slice, :, :]
+            lamar_mind = mind_loss(
+                lamar_tensor, fixed_tensor
             ).item()
-            ants_mind = -mind_loss(
-                ants_tensor[:, :, mid_slice, :, :], fixed_tensor[:, :, mid_slice, :, :]
+            ants_mind = mind_loss(
+                ants_tensor, fixed_tensor
             ).item()
 
         results["mind"] = {"lamar": lamar_mind, "ants": ants_mind}
@@ -242,15 +213,13 @@ def compare_registration_quality(lamar_output, ants_output, fixed_img):
 
         ngf = NormalizedGradientField3d(
             grad_method="default",
-            gauss_sigma=0.5,
-            eps=1e-5,
             mm_spacing=pixel_spacing,
             reduction="mean",
         )
 
         with torch.no_grad():
-            lamar_ngf = -ngf(lamar_tensor, fixed_tensor).item()
-            ants_ngf = -ngf(ants_tensor, fixed_tensor).item()
+            lamar_ngf = ngf(lamar_tensor, fixed_tensor).item()
+            ants_ngf = ngf(ants_tensor, fixed_tensor).item()
 
         results["ngf"] = {"lamar": lamar_ngf, "ants": ants_ngf}
     except Exception as e:
@@ -258,190 +227,6 @@ def compare_registration_quality(lamar_output, ants_output, fixed_img):
         results["ngf"] = None
 
     return results
-
-
-def save_ngf_fields(
-    source_img, target_img, output_prefix, mm_spacing=None, gauss_sigma=0.5
-):
-    """
-    Calculate and save normalized gradient fields as NIfTI files.
-
-    Args:
-        source_img: Path to source NIfTI image or PyTorch tensor
-        target_img: Path to target NIfTI image or PyTorch tensor
-        output_prefix: Prefix for output filenames
-        mm_spacing: Optional pixel spacing (will be extracted from header if None)
-        gauss_sigma: Gaussian smoothing sigma
-    """
-    import nibabel as nib
-    import torch
-    from normalized_gradient_field import NormalizedGradientField3d
-    from kernels import spatial_filter_nd
-    import os
-
-    # Handle different input types
-    if isinstance(source_img, str):
-        # Load images from file paths
-        src_nib = nib.load(source_img)
-        tgt_nib = nib.load(target_img)
-
-        # Get spacing from header if not provided
-        if mm_spacing is None:
-            mm_spacing = src_nib.header.get_zooms()[:3]
-
-        # Convert to torch tensors
-        src_data = torch.from_numpy(src_nib.get_fdata()).float()
-        tgt_data = torch.from_numpy(tgt_nib.get_fdata()).float()
-
-        # Add batch and channel dimensions
-        src_data = src_data.unsqueeze(0).unsqueeze(0)
-        tgt_data = tgt_data.unsqueeze(0).unsqueeze(0)
-
-        affine = src_nib.affine
-        header = src_nib.header
-    else:
-        # Assume tensors were passed directly
-        src_data = source_img
-        tgt_data = target_img
-        affine = np.eye(4)  # Default affine
-        header = None
-
-        if mm_spacing is None:
-            mm_spacing = [1.0, 1.0, 1.0]  # Default spacing
-
-    # Create NGF calculator
-    ngf_calc = NormalizedGradientField3d(
-        grad_method="default",
-        gauss_sigma=gauss_sigma,
-        eps=1e-5,
-        mm_spacing=mm_spacing,
-        reduction="none",  # Important: no reduction to keep the full field
-    )
-
-    # Ensure output directory exists
-    os.makedirs(os.path.dirname(output_prefix), exist_ok=True)
-
-    # Calculate and save gradient fields
-    with torch.no_grad():
-        # Get source and target shape
-        b, c = src_data.shape[:2]
-        spatial_shape = src_data.shape[2:]
-
-        # Reshape
-        source = src_data.view(b * c, 1, *spatial_shape)
-        target = tgt_data.view(b * c, 1, *spatial_shape)
-
-        # Apply smoothing if needed
-        if ngf_calc.gauss_kernel_x is not None:
-            source = spatial_filter_nd(source, ngf_calc.gauss_kernel_x)
-            target = spatial_filter_nd(target, ngf_calc.gauss_kernel_x)
-
-        # Calculate gradients
-        src_grad_x = (
-            spatial_filter_nd(source, ngf_calc.grad_u_kernel) * ngf_calc.mm_spacing[0]
-        )
-        src_grad_y = (
-            spatial_filter_nd(source, ngf_calc.grad_v_kernel) * ngf_calc.mm_spacing[1]
-        )
-        src_grad_z = (
-            spatial_filter_nd(source, ngf_calc.grad_w_kernel) * ngf_calc.mm_spacing[2]
-        )
-
-        tar_grad_x = (
-            spatial_filter_nd(target, ngf_calc.grad_u_kernel) * ngf_calc.mm_spacing[0]
-        )
-        tar_grad_y = (
-            spatial_filter_nd(target, ngf_calc.grad_v_kernel) * ngf_calc.mm_spacing[1]
-        )
-        tar_grad_z = (
-            spatial_filter_nd(target, ngf_calc.grad_w_kernel) * ngf_calc.mm_spacing[2]
-        )
-
-        # Calculate gradient magnitudes
-        src_grad_norm = src_grad_x**2 + src_grad_y**2 + src_grad_z**2 + ngf_calc.eps**2
-        tar_grad_norm = tar_grad_x**2 + tar_grad_y**2 + tar_grad_z**2 + ngf_calc.eps**2
-
-        # Calculate dot product
-        grad_dot_product = (
-            src_grad_x * tar_grad_x + src_grad_y * tar_grad_y + src_grad_z * tar_grad_z
-        )
-
-        # Calculate NGF field
-        ngf_field = -0.5 * (grad_dot_product**2 / (src_grad_norm * tar_grad_norm))
-        ngf_field = ngf_field.view(b, c, *spatial_shape)
-
-        # Convert to numpy and remove batch/channel dimensions
-        src_grad_x_np = src_grad_x.view(b, c, *spatial_shape)[0, 0].cpu().numpy()
-        src_grad_y_np = src_grad_y.view(b, c, *spatial_shape)[0, 0].cpu().numpy()
-        src_grad_z_np = src_grad_z.view(b, c, *spatial_shape)[0, 0].cpu().numpy()
-
-        tar_grad_x_np = tar_grad_x.view(b, c, *spatial_shape)[0, 0].cpu().numpy()
-        tar_grad_y_np = tar_grad_y.view(b, c, *spatial_shape)[0, 0].cpu().numpy()
-        tar_grad_z_np = tar_grad_z.view(b, c, *spatial_shape)[0, 0].cpu().numpy()
-
-        ngf_field_np = ngf_field[0, 0].cpu().numpy()
-
-        # Create NIfTI images
-        nib.save(
-            nib.Nifti1Image(src_grad_x_np, affine, header),
-            f"{output_prefix}_src_grad_x.nii.gz",
-        )
-        nib.save(
-            nib.Nifti1Image(src_grad_y_np, affine, header),
-            f"{output_prefix}_src_grad_y.nii.gz",
-        )
-        nib.save(
-            nib.Nifti1Image(src_grad_z_np, affine, header),
-            f"{output_prefix}_src_grad_z.nii.gz",
-        )
-
-        nib.save(
-            nib.Nifti1Image(tar_grad_x_np, affine, header),
-            f"{output_prefix}_tar_grad_x.nii.gz",
-        )
-        nib.save(
-            nib.Nifti1Image(tar_grad_y_np, affine, header),
-            f"{output_prefix}_tar_grad_y.nii.gz",
-        )
-        nib.save(
-            nib.Nifti1Image(tar_grad_z_np, affine, header),
-            f"{output_prefix}_tar_grad_z.nii.gz",
-        )
-
-        # Save gradient magnitude images
-        src_grad_mag = np.sqrt(
-            src_grad_norm.view(b, c, *spatial_shape)[0, 0].cpu().numpy()
-        )
-        tar_grad_mag = np.sqrt(
-            tar_grad_norm.view(b, c, *spatial_shape)[0, 0].cpu().numpy()
-        )
-        nib.save(
-            nib.Nifti1Image(src_grad_mag, affine, header),
-            f"{output_prefix}_src_grad_mag.nii.gz",
-        )
-        nib.save(
-            nib.Nifti1Image(tar_grad_mag, affine, header),
-            f"{output_prefix}_tar_grad_mag.nii.gz",
-        )
-
-        # Save NGF field
-        nib.save(
-            nib.Nifti1Image(ngf_field_np, affine, header),
-            f"{output_prefix}_ngf_field.nii.gz",
-        )
-
-        print(f"Saved gradient fields to {output_prefix}_*.nii.gz")
-
-        # Return NGF metric for convenience
-        ngf_metric = NormalizedGradientField3d(
-            grad_method="default",
-            gauss_sigma=gauss_sigma,
-            eps=1e-5,
-            mm_spacing=mm_spacing,
-            reduction="mean",
-        )
-        ngf_value = -ngf_metric(src_data, tgt_data).item()
-        return ngf_value
 
 
 def main():
@@ -469,17 +254,6 @@ def main():
     )
     parser.add_argument(
         "--quiet", action="store_true", help="Suppress registration output"
-    )
-    parser.add_argument(
-        "--quality-metric",
-        default="mind",
-        choices=["mind", "ngf", "nmi"],
-        help="Metric for quality comparison (default: mind)",
-    )
-    parser.add_argument(
-        "--save-gradients",
-        action="store_true",
-        help="Save normalized gradient fields as NIfTI files",
     )
 
     args = parser.parse_args()
@@ -559,38 +333,6 @@ def main():
                         print("  Direct ANTs registration quality is higher")
         except Exception as e:
             print(f"Error comparing registration quality: {e}")
-
-        # Save gradient fields if requested
-        if args.save_gradients:
-            print("\n--- Saving gradient fields ---")
-            try:
-                # Create a directory for the gradient fields
-                gradient_fields_dir = os.path.join(output_dir, "gradient_fields")
-                os.makedirs(gradient_fields_dir, exist_ok=True)
-
-                # Save gradient fields for LaMAR registration
-                print("Saving LaMAR gradient fields...")
-                lamar_ngf = save_ngf_fields(
-                    lamar_output,
-                    args.fixed,
-                    os.path.join(gradient_fields_dir, "lamar"),
-                    gauss_sigma=0.5,
-                )
-
-                # Save gradient fields for ANTs registration
-                print("Saving ANTs gradient fields...")
-                ants_ngf = save_ngf_fields(
-                    ants_output,
-                    args.fixed,
-                    os.path.join(gradient_fields_dir, "ants"),
-                    gauss_sigma=0.5,
-                )
-
-                print(f"LaMAR NGF similarity: {lamar_ngf:.4f}")
-                print(f"ANTs NGF similarity: {ants_ngf:.4f}")
-
-            except Exception as e:
-                print(f"Error saving gradient fields: {e}")
 
         print("\nBenchmark completed successfully!")
 

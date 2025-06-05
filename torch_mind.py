@@ -1,157 +1,167 @@
-import torch
+
+#!/usr/bin/env python3
+"""
+mind3d.py
+==========
+
+PyTorch implementation of the 3-D Modality-Independent Neighbourhood
+Descriptor (MIND) described by Heinrich et al., *MedIA* 2012.
+
+Default parameters reproduce the configuration that gave the lowest
+Target Registration Error in the paper (patch 3×3×3, Gaussian σ ≈ 0.5,
+six-neighbourhood search region).
+
+Author: Ian Goodall-Halliwell
+"""
+
 import math
+from typing import Tuple
+
+import torch
+from torch import nn
 
 
-class MIND(torch.nn.Module):
+# -----------------------------------------------------------------------------#
+#                               MIND descriptor                                 #
+# -----------------------------------------------------------------------------#
+class MIND3D(nn.Module):
+    r"""Modality-Independent Neighbourhood Descriptor for 3-D images.
 
-    def __init__(
-        self,
-        non_local_region_size=9,
-        patch_size=7,
-        neighbor_size=3,
-        gaussian_patch_sigma=3.0,
-    ):
-        super(MIND, self).__init__()
-        self.nl_size = non_local_region_size
-        self.p_size = patch_size
-        self.n_size = neighbor_size
-        self.sigma2 = gaussian_patch_sigma * gaussian_patch_sigma
+    Args
+    ----
+    patch_size : int
+        Length of one edge of the cubic patch (must be odd).  The paper
+        recommends 3 (i.e. radius 1).
+    sigma : float
+        Standard deviation of the Gaussian patch weighting (in voxels).
+        0.5 is the value used in the reference implementation.
+    """
 
-        # calc shifted images in non local region
-        self.image_shifter = torch.nn.Conv2d(
+    def __init__(self, patch_size: int = 3, sigma: float = 0.5):
+        super().__init__()
+        if patch_size % 2 == 0:
+            raise ValueError("patch_size must be odd")
+        self.patch_size = patch_size
+        self.sigma2 = sigma ** 2
+
+        # --------------------------- shift kernels --------------------------- #
+        # Six one-hot 3×3×3 kernels that pick (+x,-x,+y,-y,+z,-z) neighbours.
+        shift_kernels = torch.zeros(6, 1, 3, 3, 3)  # (out_c, in_c, D, H, W)
+        centres = [
+            (2, 1, 1),  # +z
+            (0, 1, 1),  # -z
+            (1, 2, 1),  # +y
+            (1, 0, 1),  # -y
+            (1, 1, 2),  # +x
+            (1, 1, 0),  # -x
+        ]
+        for k, (d, h, w) in enumerate(centres):
+            shift_kernels[k, 0, d, h, w] = 1.0
+
+        self.shifter = nn.Conv3d(
             in_channels=1,
-            out_channels=self.nl_size * self.nl_size,
-            kernel_size=(self.nl_size, self.nl_size),
-            stride=1,
-            padding=((self.nl_size - 1) // 2, (self.nl_size - 1) // 2),
-            dilation=1,
+            out_channels=6,
+            kernel_size=3,
+            padding=1,
+            bias=False,
             groups=1,
+        )
+        self.shifter.weight.data.copy_(shift_kernels)
+        self.shifter.weight.requires_grad_(False)
+
+        # ----------------------- Gaussian patch kernel ----------------------- #
+        g = torch.zeros(1, patch_size, patch_size, patch_size)
+        c = (patch_size - 1) / 2.0
+        for z in range(patch_size):
+            for y in range(patch_size):
+                for x in range(patch_size):
+                    d2 = (x - c) ** 2 + (y - c) ** 2 + (z - c) ** 2
+                    g[0, z, y, x] = math.exp(-d2 / self.sigma2)
+        g /= g.sum()  # normalise so Σ g = 1
+
+        self.patcher = nn.Conv3d(
+            in_channels=6,
+            out_channels=6,
+            kernel_size=patch_size,
+            padding=patch_size // 2,
             bias=False,
-            padding_mode="zeros",
+            groups=6,
         )
+        for k in range(6):
+            self.patcher.weight.data[k] = g
+        self.patcher.weight.requires_grad_(False)
 
-        for i in range(self.nl_size * self.nl_size):
-            t = torch.zeros((1, self.nl_size, self.nl_size))
-            t[0, i % self.nl_size, i // self.nl_size] = 1
-            self.image_shifter.weight.data[i] = t
+    @torch.inference_mode()
+    def forward(self, img: torch.Tensor) -> torch.Tensor:
+        """
+        Parameters
+        ----------
+        img : (B,1,D,H,W) torch.Tensor
+            Single-channel 3-D image volumes.
 
-        # patch summation
-        self.summation_patcher = torch.nn.Conv2d(
-            in_channels=self.nl_size * self.nl_size,
-            out_channels=self.nl_size * self.nl_size,
-            kernel_size=(self.p_size, self.p_size),
-            stride=1,
-            padding=((self.p_size - 1) // 2, (self.p_size - 1) // 2),
-            dilation=1,
-            groups=self.nl_size * self.nl_size,
-            bias=False,
-            padding_mode="zeros",
-        )
+        Returns
+        -------
+        mind : (B,6,D,H,W) torch.Tensor
+            The six-channel MIND descriptor.
+        """
+        if img.ndim != 5 or img.size(1) != 1:
+            raise ValueError("Input must be (B,1,D,H,W)")
 
-        for i in range(self.nl_size * self.nl_size):
-            # gaussian kernel
-            t = torch.zeros((1, self.p_size, self.p_size))
-            cx = (self.p_size - 1) // 2
-            cy = (self.p_size - 1) // 2
-            for j in range(self.p_size * self.p_size):
-                x = j % self.p_size
-                y = j // self.p_size
-                d2 = torch.norm(torch.tensor([x - cx, y - cy]).float(), 2)
-                t[0, x, y] = math.exp(-d2 / self.sigma2)
+        # 1) shift to six neighbours
+        shifted = self.shifter(img)  # (B,6,D,H,W)
 
-            self.summation_patcher.weight.data[i] = t
+        # 2) patch-wise squared distances
+        diff = shifted - img.repeat_interleave(6, dim=1)
+        Dp = self.patcher(diff.pow(2))  # (B,6,D,H,W)
 
-        # neighbor images
-        self.neighbors = torch.nn.Conv2d(
-            in_channels=1,
-            out_channels=self.n_size * self.n_size,
-            kernel_size=(self.n_size, self.n_size),
-            stride=1,
-            padding=((self.n_size - 1) // 2, (self.n_size - 1) // 2),
-            dilation=1,
-            groups=1,
-            bias=False,
-            padding_mode="zeros",
-        )
+        # 3) local variance V(x): mean over the six channels
+        Vx = Dp.mean(dim=1, keepdim=True)  # (B,1,D,H,W)
 
-        for i in range(self.n_size * self.n_size):
-            t = torch.zeros((1, self.n_size, self.n_size))
-            t[0, i % self.n_size, i // self.n_size] = 1
-            self.neighbors.weight.data[i] = t
-
-        # neighbor patcher
-        self.neighbor_summation_patcher = torch.nn.Conv2d(
-            in_channels=self.n_size * self.n_size,
-            out_channels=self.n_size * self.n_size,
-            kernel_size=(self.p_size, self.p_size),
-            stride=1,
-            padding=((self.p_size - 1) // 2, (self.p_size - 1) // 2),
-            dilation=1,
-            groups=self.n_size * self.n_size,
-            bias=False,
-            padding_mode="zeros",
-        )
-
-        for i in range(self.n_size * self.n_size):
-            t = torch.ones((1, self.p_size, self.p_size))
-            self.neighbor_summation_patcher.weight.data[i] = t
-
-    def forward(self, orig):
-        assert len(orig.shape) == 4
-        assert orig.shape[1] == 1
-
-        # get original image channel stack
-        orig_stack = torch.stack(
-            [orig.squeeze(dim=1) for i in range(self.nl_size * self.nl_size)], dim=1
-        )
-
-        # get shifted images
-        shifted = self.image_shifter(orig)
-
-        # get image diff
-        diff_images = shifted - orig_stack
-
-        # diff's L2 norm
-        Dx_alpha = self.summation_patcher(torch.pow(diff_images, 2.0))
-
-        # calc neighbor's variance
-        neighbor_images = self.neighbor_summation_patcher(self.neighbors(orig))
-        Vx = neighbor_images.var(dim=1).unsqueeze(dim=1)
-
-        # output mind
-        nume = torch.exp(-Dx_alpha / (Vx + 1e-8))
-        denomi = nume.sum(dim=1).unsqueeze(dim=1)
-        mind = nume / denomi
+        # 4) softmax-style normalised descriptor
+        num = torch.exp(-Dp / (Vx + 1e-8))
+        denom = num.sum(dim=1, keepdim=True)
+        mind = num / (denom + 1e-8)
         return mind
 
 
-class MINDLoss(torch.nn.Module):
+# -----------------------------------------------------------------------------#
+#                                   Loss                                       #
+# -----------------------------------------------------------------------------#
+class MINDLoss3D(nn.Module):
+    r"""ℓ¹ loss between two 3-D MIND volumes."""
 
-    def __init__(
-        self,
-        non_local_region_size=9,
-        patch_size=7,
-        neighbor_size=3,
-        gaussian_patch_sigma=3.0,
-    ):
-        super(MINDLoss, self).__init__()
-        self.nl_size = non_local_region_size
-        self.MIND = MIND(
-            non_local_region_size=non_local_region_size,
-            patch_size=patch_size,
-            neighbor_size=neighbor_size,
-            gaussian_patch_sigma=gaussian_patch_sigma,
-        )
+    def __init__(self, patch_size: int = 3, sigma: float = 0.5):
+        super().__init__()
+        self.descriptor = MIND3D(patch_size, sigma)
 
-    def forward(self, input, target):
-        in_mind = self.MIND(input)
-        tar_mind = self.MIND(target)
-        mind_diff = in_mind - tar_mind
-        l1 = torch.norm(mind_diff, 1)
-        return l1 / (input.shape[2] * input.shape[3] * self.nl_size * self.nl_size)
+    def forward(
+        self, moving: torch.Tensor, fixed: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        moving, fixed : (B,1,D,H,W) tensors.
+        Returns scalar loss = mean₍voxels,channels₎ |MINDₘ − MIND𝒻|.
+        """
+        mind_m = self.descriptor(moving)
+        mind_f = self.descriptor(fixed)
+        diff = (mind_m - mind_f).abs()  # L1
+        B, C, D, H, W = diff.shape
+        return diff.sum() / (B * C * D * H * W)
+
+
+# -----------------------------------------------------------------------------#
+#                                 demo / test                                  #
+# -----------------------------------------------------------------------------#
+def _demo(shape: Tuple[int, int, int] = (64, 64, 64)) -> None:
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Running demo on {device}")
+
+    moving = torch.randn(1, 1, *shape, device=device)
+    fixed = torch.randn(1, 1, *shape, device=device)
+
+    criterion = MINDLoss3D().to(device)
+    loss = criterion(moving, fixed)
+    print(f"MIND-based loss for random volumes: {loss.item():.4f}")
 
 
 if __name__ == "__main__":
-    mind = MIND()
-    orig = torch.ones(4, 1, 128, 128)
-    mind(orig)
+    _demo()

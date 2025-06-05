@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "LAMAReg"
+version = "1.0.1"
+authors = [
+  { name="Ian Goodall-Halliwell", email="goodallhalliwell@gmail.com" },
+]
+description = "Label Augmented Modality Agnostic Registration: A Python-based workflow combining deep learning-based segmentation and numerical solutions to generate precise warpfields between different MRI modalities."
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = "CC-BY-NC-4.0"
+license-files = ["LICEN[CS]E*"]
+dependencies = [
+    "absl-py", "antspyx", "astunparse", "certifi", "charset-normalizer",
+    "colorama", "cycler", "flatbuffers", "fonttools", "gast", "google-pasta",
+    "grpcio", "h5py", "idna", "importlib_resources", "keras", "kiwisolver",
+    "libclang", "markdown", "markdown-it-py", "MarkupSafe", "matplotlib",
+    "mdurl", "namex", "nibabel", "numpy", "opt_einsum", "optree", "packaging",
+    "pandas", "patsy", "pillow", "protobuf", "Pygments", "pyparsing",
+    "python-dateutil", "pytz", "PyYAML", "requests", "rich", "scipy", "six",
+    "statsmodels", "tensorboard", "tensorboard-data-server", "tensorflow",
+    "termcolor", "typing_extensions", "tzdata", "urllib3", "webcolors",
+    "Werkzeug", "wrapt"
+]
+
+[project.scripts]
+lamar = "lamareg.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/MICA-MNI/LAMAReg"
+Issues = "https://github.com/MICA-MNI/LAMAReg/issues"
+
+[tool.setuptools]
+packages = ["lamareg", "lamareg.SynthSeg", "lamareg.ext", "lamareg.ext.lab2im", 
+           "lamareg.ext.neuron", "lamareg.scripts", "lamareg.scripts.data", 
+           "lamareg.scripts.data.labels_classes_priors", "lamareg.utils"]
+include-package-data = true
