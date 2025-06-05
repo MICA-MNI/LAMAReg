@@ -11,3 +11,5 @@ example_data/sub-PNC025_ses-01_space-nativepro_T1w.nii.gz
 LAMAReg.egg-info/SOURCES.txt
 LAMAReg.egg-info/PKG-INFO
 /example_data
+/testout
+/registration_results_fixed
