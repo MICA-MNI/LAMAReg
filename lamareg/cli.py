@@ -217,6 +217,11 @@ def main():
     register_parser.add_argument(
         "--skip-qc", action="store_true", help="whether to skip QC (default: False)"
     )
+    register_parser.add_argument(
+        "--robust",
+        action="store_true",
+        help="Whether to use robust registration (default: False)",
+    )
 
     # WORKFLOW 2: Generate warpfield only
     warpfield_parser = subparsers.add_parser(
@@ -285,6 +290,11 @@ def main():
     )
     warpfield_parser.add_argument(
         "--skip-qc", action="store_true", help="whether to skip QC (default: False)"
+    )
+    warpfield_parser.add_argument(
+        "--robust",
+        action="store_true",
+        help="Whether to use robust registration (default: False)",
     )
 
     # WORKFLOW 3: Apply existing warpfield
@@ -423,6 +433,7 @@ def main():
                 skip_moving_parc=args.skip_moving_parc,
                 skip_qc=args.skip_qc,
                 qc_csv=args.qc_csv,
+                robust=args.robust,
             )
 
             # Clean up temporary files after successful completion
@@ -493,6 +504,7 @@ def main():
                 skip_moving_parc=args.skip_moving_parc,
                 skip_qc=args.skip_qc,
                 qc_csv=args.qc_csv,
+                robust=args.robust,
             )
 
             # Clean up temporary files after successful completion

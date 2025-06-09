@@ -149,6 +149,8 @@ lamar register --moving example_data/sub-HC001_ses-02_space-dwi_desc-b0.nii.gz -
   --synthseg-threads 4 --ants-threads 8
 ```
 
+
+
 ### Generate parcellations separately:
 ```bash
 lamar synthseg --i subject_t1w.nii.gz --o t1w_parcellation.nii.gz --parc

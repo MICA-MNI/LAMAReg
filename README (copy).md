@@ -1,5 +1,7 @@
 # LAMAReg: Label Augmented Modality Agnostic Registration
 
+lamar register --moving example_data/sub-HC001_ses-02_space-dwi_desc-b0.nii.gz --fixed example_data/sub-HC001_ses-01_T1w.nii.gz --output output/sub-001_dwi_in_T1w.nii.gz --moving-parc output/sub-001_dwi_parc.nii.gz --fixed-parc output/sub-001_T1w_parc.nii.gz --registered-parc output/sub-001_dwi_reg_parc.nii.gz --affine output/dwi_to_T1w_affine.mat --warpfield output/dwi_to_T1w_warp.nii.gz --inverse-warpfield output/T1w_to_dwi_warp.nii.gz --inverse-affine output/T1w_to_dwi_affine.mat --synthseg-threads 4 --ants-threads 8
+
 <div align="left">
 
 [![Version](https://img.shields.io/github/v/tag/MICA-MNI/LAMAReg)](https://github.com/MICA-MNI/LAMAReg)

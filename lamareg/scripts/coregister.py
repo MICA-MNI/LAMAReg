@@ -110,6 +110,9 @@ def ants_linear_nonlinear_registration(
     rev_warp_file=None,
     rev_affine_file=None,
     registration_method="SyNRA",
+    initial_affine_file=None,
+    initial_warp_file=None,
+    interpolator="genericLabel",
 ):
     """Perform linear (rigid + affine) and nonlinear registration using ANTsPy.
 
@@ -149,22 +152,38 @@ def ants_linear_nonlinear_registration(
     # Load images
     fixed = ants.image_read(fixed_file)
     moving = ants.image_read(moving_file)
+    initial_transform = []
+
+    if initial_warp_file:
+        initial_transform.append(initial_warp_file)
+
+    if initial_affine_file:
+        initial_transform.append(initial_affine_file)
+
+    if initial_transform == []:
+        initial_transform = None
 
     transforms = ants.registration(
         fixed=fixed,
         moving=moving,
         type_of_transform=registration_method,
-        # radius_or_number_of_bins=[32, 32, 32],  # Fewer bins for label data
-        interpolator="genericLabel",  # Preserve discrete label values
-        use_histogram_matching=False,  # Not needed for label maps
+        interpolator=interpolator,
+        initial_transform=initial_transform,
     )
-
+    print(transforms)
     # The result of the registration is a dictionary containing, among other keys:
+    transformlist = []
+    if initial_transform is not None:
+        # If initial transforms were provided, prepend them to the transform list
+        transformlist.append(initial_transform)
+    # Add the forward transforms (warp and affine)
+    transformlist.append(transforms["fwdtransforms"])
+
     registered = ants.apply_transforms(
         fixed=fixed,
         moving=moving,
         transformlist=transforms["fwdtransforms"],
-        interpolator="genericLabel",
+        interpolator=interpolator,
     )
 
     # Save the registered moving image
@@ -202,7 +221,13 @@ def main():
     parser.add_argument(
         "--rev-affine-file", help="Reverse affine transformation file path"
     )
-
+    parser.add_argument(
+        "--initial-affine-file", help="Initial affine transformation file path"
+    )
+    parser.add_argument("--initial-warp-file", help="Initial warp field file path")
+    parser.add_argument(
+        "--interpolator", help="Interpolator type", default="genericLabel"
+    )
     args = parser.parse_args()
 
     # Call the coregister function with the parsed arguments
@@ -215,6 +240,9 @@ def main():
         warp_file=args.warp_file,
         rev_warp_file=args.rev_warp_file,
         rev_affine_file=args.rev_affine_file,
+        initial_affine_file=args.initial_affine_file,
+        initial_warp_file=args.initial_warp_file,
+        interpolator=args.interpolator,
     )
 
 

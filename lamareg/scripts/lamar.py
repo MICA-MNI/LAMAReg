@@ -40,6 +40,7 @@ def lamareg(
     skip_fixed_parc=False,
     skip_moving_parc=False,
     skip_qc=False,
+    robust=False,
 ):
     """
     Perform contrast-agnostic registration using SynthSeg parcellation.
@@ -272,7 +273,52 @@ def lamareg(
                 cmd.extend(["--rev-affine-file", inverse_affine_file])
 
             subprocess.run(cmd, check=True, env=env)
+            if robust:
+                print(
+                    "\n--- Step 2.1: Running robust registration for improved accuracy ---"
+                )
+                robust_cmd = [
+                    "lamar",
+                    "coregister",
+                    "--fixed-file",
+                    reference_image,
+                    "--moving-file",
+                    input_image,
+                    "--interpolator",
+                    "linear",
+                    "--registration-method",
+                    "SyNOnly",
+                    "--initial-affine-file",
+                    affine_file,
+                    "--initial-warp-file",
+                    warp_file,
+                ]
 
+                if output_image is not None:
+                    robust_cmd.extend(["--output", output_image])
+
+                # Only include transform file flags if paths were provided
+                if affine_file:
+                    affine_file_stage2 = affine_file.replace(".mat", "_stage2.mat")
+                    robust_cmd.extend(["--affine-file", affine_file_stage2])
+
+                if warp_file:
+                    warp_file_stage2 = warp_file.replace(".nii.gz", "_stage2.nii.gz")
+                    robust_cmd.extend(["--warp-file", warp_file_stage2])
+
+                if inverse_warp_file:
+                    inverse_warp_file_stage2 = inverse_warp_file.replace(
+                        ".nii.gz", "_stage2.nii.gz"
+                    )
+                    robust_cmd.extend(["--rev-warp-file", inverse_warp_file_stage2])
+
+                if inverse_affine_file:
+                    inverse_affine_file_stage2 = inverse_affine_file.replace(
+                        ".mat", "_stage2.mat"
+                    )
+                    robust_cmd.extend(["--rev-affine-file", inverse_affine_file_stage2])
+
+                subprocess.run(robust_cmd, check=True, env=env)
             # Run Dice evaluation after coregistration
             if not skip_qc:
                 # If qc_csv is not provided, generate a default path based on output_parc
@@ -312,36 +358,39 @@ def lamareg(
                     )
 
         # WORKFLOW 1 & 3: Apply transformation to the original input image
-        if not generate_warpfield and output_image is not None:
-            print("\n--- Step 3: Applying transformation to original input image ---")
-            apply_cmd = [
-                "lamar",
-                "apply-warp",  # Use hyphen instead of underscore
-                "--moving",
-                input_image,
-                "--reference",
-                reference_image,
-                "--output",
-                output_image,
-            ]
+        if not robust:
+            if not generate_warpfield and output_image is not None:
+                print(
+                    "\n--- Step 3: Applying transformation to original input image ---"
+                )
+                apply_cmd = [
+                    "lamar",
+                    "apply-warp",  # Use hyphen instead of underscore
+                    "--moving",
+                    input_image,
+                    "--reference",
+                    reference_image,
+                    "--output",
+                    output_image,
+                ]
 
-            # Only include transform flags if files were provided
-            if affine_file:
-                apply_cmd.extend(["--affine", affine_file])
+                # Only include transform flags if files were provided
+                if affine_file:
+                    apply_cmd.extend(["--affine", affine_file])
 
-            if warp_file:
-                apply_cmd.extend(["--warp", warp_file])
+                if warp_file:
+                    apply_cmd.extend(["--warp", warp_file])
 
-            subprocess.run(apply_cmd, check=True, env=env)
+                subprocess.run(apply_cmd, check=True, env=env)
 
-            print(f"\nSuccess! Registered image saved to: {output_image}")
-        elif generate_warpfield:
-            success_msg = "\nSuccess! "
-            if warp_file:
-                success_msg += f"Warp field generated at: {warp_file}"
-            if affine_file:
-                success_msg += f"\nAffine transformation saved at: {affine_file}"
-            print(success_msg)
+                print(f"\nSuccess! Registered image saved to: {output_image}")
+            elif generate_warpfield:
+                success_msg = "\nSuccess! "
+                if warp_file:
+                    success_msg += f"Warp field generated at: {warp_file}"
+                if affine_file:
+                    success_msg += f"\nAffine transformation saved at: {affine_file}"
+                print(success_msg)
 
     except subprocess.CalledProcessError as e:
         print(f"Error during processing: {e}", file=sys.stderr)
