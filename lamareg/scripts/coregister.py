@@ -113,31 +113,30 @@ def ants_linear_nonlinear_registration(
     initial_affine_file=None,
     initial_warp_file=None,
     interpolator="genericLabel",
+    **kwargs,  # Add this to accept extra parameters
 ):
     """Perform linear (rigid + affine) and nonlinear registration using ANTsPy.
 
     This function performs registration between two images using ANTs' SyNRA transform,
     which includes both linear (rigid + affine) and nonlinear (SyN) components.
-    The registered image is saved to the specified output path, and the transform
-    files can optionally be saved as well.
 
     Args:
         fixed_file (str): Path to the fixed/reference image.
         moving_file (str): Path to the moving image that will be registered.
         out_file (str, optional): Path where the registered image will be saved.
-            Defaults to "registered_image.nii".
         warp_file (str, optional): Path to save the forward warp field.
-            Defaults to None.
         affine_file (str, optional): Path to save the forward affine transform.
-            Defaults to None.
         rev_warp_file (str, optional): Path to save the reverse warp field.
-            Defaults to None.
         rev_affine_file (str, optional): Path to save the reverse affine transform.
-            Defaults to None.
+        registration_method (str): Registration method to use. Defaults to "SyNRA".
+        initial_affine_file (str, optional): Path to initial affine transform.
+        initial_warp_file (str, optional): Path to initial warp field.
+        interpolator (str): Interpolation method. Defaults to "genericLabel".
+        **kwargs: Additional arguments passed directly to ants.registration
+                 Examples: verbose, grad_step, reg_iterations, etc.
 
     Returns:
-        None: The function saves the registered image and transform files to disk
-        but does not return any values.
+        None: The function saves the registered image and transform files to disk.
     """
     if (
         not out_file
@@ -163,14 +162,16 @@ def ants_linear_nonlinear_registration(
     if initial_transform == []:
         initial_transform = None
 
+    # Pass all arguments to ants.registration, including any extra kwargs
     transforms = ants.registration(
         fixed=fixed,
         moving=moving,
         type_of_transform=registration_method,
         interpolator=interpolator,
         initial_transform=initial_transform,
+        **kwargs,  # Pass through all additional arguments
     )
-    print(transforms)
+
     # The result of the registration is a dictionary containing, among other keys:
     transformlist = []
     if initial_transform is not None:
@@ -190,8 +191,7 @@ def ants_linear_nonlinear_registration(
     if out_file is not None:
         ants.image_write(registered, out_file)
         print(f"Registration complete. Saved registered image as {out_file}")
-    # If specified, save the transform files
-    # Typically, transforms["fwdtransforms"][0] is the warp field, and [1] is the affine.
+
     if warp_file:
         shutil.copyfile(transforms["fwdtransforms"][0], warp_file)
         print(f"Saved warp field as {warp_file}")
@@ -209,6 +209,8 @@ def ants_linear_nonlinear_registration(
 def main():
     """Entry point for command-line use"""
     parser = argparse.ArgumentParser(description="Coregistration tool")
+
+    # Required/standard arguments
     parser.add_argument("--fixed-file", required=True, help="Fixed image file path")
     parser.add_argument("--moving-file", required=True, help="Moving image file path")
     parser.add_argument("--output", help="Output image file path")
@@ -228,9 +230,108 @@ def main():
     parser.add_argument(
         "--interpolator", help="Interpolator type", default="genericLabel"
     )
+
+    # Add common ANTs registration parameters
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
+    parser.add_argument(
+        "--grad-step", type=float, default=0.2, help="Gradient step size (default: 0.2)"
+    )
+    parser.add_argument(
+        "--flow-sigma",
+        type=float,
+        default=3,
+        help="Smoothing for update field (default: 3)",
+    )
+    parser.add_argument(
+        "--total-sigma",
+        type=float,
+        default=0,
+        help="Smoothing for total field (default: 0)",
+    )
+    parser.add_argument(
+        "--aff-metric",
+        default="mattes",
+        help="Metric for affine stage (default: mattes)",
+    )
+    parser.add_argument(
+        "--aff-sampling",
+        type=int,
+        default=32,
+        help="Sampling parameter for affine metric (default: 32)",
+    )
+    parser.add_argument(
+        "--syn-metric", default="mattes", help="Metric for SyN stage (default: mattes)"
+    )
+    parser.add_argument(
+        "--syn-sampling",
+        type=int,
+        default=32,
+        help="Sampling parameter for SyN metric (default: 32)",
+    )
+
+    # More complex parameters that need special handling
+    parser.add_argument(
+        "--reg-iterations", help="SyN iterations, comma-separated (e.g., '40,20,0')"
+    )
+    parser.add_argument(
+        "--aff-iterations",
+        help="Affine iterations, comma-separated (e.g., '2100,1200,1200,10')",
+    )
+    parser.add_argument(
+        "--aff-shrink-factors",
+        help="Affine shrink factors, comma-separated (e.g., '6,4,2,1')",
+    )
+    parser.add_argument(
+        "--aff-smoothing-sigmas",
+        help="Affine smoothing sigmas, comma-separated (e.g., '3,2,1,0')",
+    )
+    parser.add_argument(
+        "--random-seed", type=int, help="Random seed for reproducibility"
+    )
+
     args = parser.parse_args()
 
-    # Call the coregister function with the parsed arguments
+    # Process tuple arguments from strings
+    kwargs = {}
+
+    if args.verbose:
+        kwargs["verbose"] = True
+
+    # Add standard numeric parameters
+    for param in [
+        "grad_step",
+        "flow_sigma",
+        "total_sigma",
+        "aff_metric",
+        "aff_sampling",
+        "syn_metric",
+        "syn_sampling",
+    ]:
+        param_value = getattr(args, param.replace("-", "_"))
+        if param_value is not None:
+            kwargs[param] = param_value
+
+    # Convert comma-separated strings to tuples for complex parameters
+    for param in [
+        "reg_iterations",
+        "aff_iterations",
+        "aff_shrink_factors",
+        "aff_smoothing_sigmas",
+    ]:
+        param_value = getattr(args, param.replace("-", "_"))
+        if param_value:
+            try:
+                # Convert string "40,20,0" to tuple (40, 20, 0)
+                kwargs[param] = tuple(int(x) for x in param_value.split(","))
+            except ValueError:
+                print(f"Error parsing {param}. Use comma-separated integers.")
+                sys.exit(1)
+
+    # Add random seed if specified
+    if args.random_seed is not None:
+        kwargs["random_seed"] = args.random_seed
+
+    # Call the coregister function with all arguments
     ants_linear_nonlinear_registration(
         fixed_file=args.fixed_file,
         moving_file=args.moving_file,
@@ -243,6 +344,7 @@ def main():
         initial_affine_file=args.initial_affine_file,
         initial_warp_file=args.initial_warp_file,
         interpolator=args.interpolator,
+        **kwargs,  # Pass all the extra parameters
     )
 
 

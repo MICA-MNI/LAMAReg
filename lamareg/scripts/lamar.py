@@ -292,6 +292,8 @@ def lamareg(
                     affine_file,
                     "--initial-warp-file",
                     warp_file,
+                    "--reg-iterations",
+                    "10, 20",
                 ]
 
                 if output_image is not None:
