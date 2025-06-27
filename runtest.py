@@ -19,7 +19,7 @@ import subprocess
 import nibabel as nib
 import numpy as np
 import torch
-
+import ants
 
 def run_lamar_registration(
     moving_img,
@@ -81,6 +81,63 @@ def run_lamar_registration(
     return elapsed_time, output_img
 
 
+def run_lamar_registration_robust(
+    moving_img,
+    fixed_img,
+    output_dir,
+    registration_method="SyNRA",
+    threads=1,
+    verbose=True,
+):
+    """Run registration using LaMAR coregister with initial transform and measure time."""
+    start_time = time.time()
+
+    # Set up output paths
+    output_img = os.path.join(output_dir, "lamar_robust_registered.nii.gz")
+    registered_parc = os.path.join(output_dir, "registered_parc_robust.nii.gz")
+    affine_file = os.path.join(output_dir, "lamar_robust_affine.mat")
+    warp_file = os.path.join(output_dir, "lamar_robust_warp.nii.gz")
+    
+    # Initial transform files from standard registration
+    initial_affine_file = os.path.join(output_dir, "lamar_affine.mat")
+    initial_warp_file = os.path.join(output_dir, "lamar_warp.nii.gz")
+
+    # Build command for lamar coregister with initial transforms
+    cmd = [
+        "lamar", "coregister",
+        "--fixed-file", fixed_img,
+        "--moving-file", moving_img,
+        "--output", output_img,
+        "--warp-file", warp_file,
+        "--affine-file", affine_file,
+        "--registration-method", "SyNOnly",
+        "--initial-affine-file", initial_affine_file,
+        "--initial-warp-file", initial_warp_file,
+        "--interpolator", "linear",
+        "--reg-iterations","10, 20",
+    ]
+    
+    # Add additional parameters
+    if verbose:
+        cmd.append("--verbose")
+    
+    # Add thread parameters if coregister supports them
+    if threads > 1:
+        env = os.environ.copy()
+        env["ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS"] = str(threads)
+        env["OMP_NUM_THREADS"] = str(threads)
+
+    # Run LaMAR coregister
+    if verbose:
+        subprocess.run(cmd, check=True, env=env if threads > 1 else None)
+    else:
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
+                      env=env if threads > 1 else None)
+
+    elapsed_time = time.time() - start_time
+    return elapsed_time, output_img
+
+
 def run_direct_ants_registration(
     moving_img,
     fixed_img,
@@ -122,22 +179,98 @@ def run_direct_ants_registration(
         moving=moving_image,
         type_of_transform=type_of_transform,
         verbose=verbose,
+        reg_iterations=(10,20)
     )
 
     # Save outputs
     ants.image_write(registration["warpedmovout"], output_img)
 
+    temp_files_to_delete = set(registration['fwdtransforms'] + registration['invtransforms'])
+    deleted_count = 0
+    for temp_file in temp_files_to_delete:
+        try:
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+                deleted_count += 1
+        except OSError as e:
+            print(f"Warning: Could not remove temporary file {temp_file}: {e}")
+    print(f"Successfully cleaned up {deleted_count} temporary files.")
+
     elapsed_time = time.time() - start_time
     return elapsed_time, output_img
 
 
-def compare_registration_quality(lamar_output, ants_output, fixed_img):
+def run_direct_ants_registration_default(
+    moving_img,
+    fixed_img,
+    output_dir,
+    registration_method="SyNRA",
+    threads=1,
+    verbose=True,
+):
+    """Run direct ANTs registration via ANTsPyX with default parameters and measure time."""
+    import ants
+
+    start_time = time.time()
+
+    # Set up output paths
+    output_img = os.path.join(output_dir, "direct_ants_default_registered.nii.gz")
+
+    env = os.environ.copy()
+    # Set ANTs/ITK thread count
+    env["ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS"] = str(threads)
+    env["OMP_NUM_THREADS"] = str(threads)  # OpenMP threads for ANTs
+
+    # Load images
+    fixed_image = ants.image_read(fixed_img)
+    moving_image = ants.image_read(moving_img)
+
+    # Map registration method to ANTs type
+    type_of_transform = registration_method
+
+    # Log if verbose
+    if verbose:
+        print(f"Running ANTsPyX registration with default parameters, method: {type_of_transform}")
+        print(f"Thread count: {threads}")
+        print(f"Moving image: {moving_img}")
+        print(f"Fixed image: {fixed_img}")
+
+    # Perform registration with default parameters
+    registration = ants.registration(
+        fixed=fixed_image,
+        moving=moving_image,
+        type_of_transform=type_of_transform,
+        verbose=verbose,
+        # No reg_iterations parameter means using ANTs defaults
+    )
+
+    # Save outputs
+    ants.image_write(registration["warpedmovout"], output_img)
+
+    temp_files_to_delete = set(registration['fwdtransforms'] + registration['invtransforms'])
+    deleted_count = 0
+    for temp_file in temp_files_to_delete:
+        try:
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+                deleted_count += 1
+        except OSError as e:
+            print(f"Warning: Could not remove temporary file {temp_file}: {e}")
+    print(f"Successfully cleaned up {deleted_count} temporary files.")
+
+    elapsed_time = time.time() - start_time
+    return elapsed_time, output_img
+
+
+def compare_registration_quality(lamar_output, ants_output, fixed_img, lamar_robust_output=None, ants_default_output=None):
     """Compare the registration quality using all available metrics.
 
     Args:
         lamar_output: Path to LaMAR registered image
         ants_output: Path to ANTs registered image
         fixed_img: Path to fixed reference image
+        lamar_robust_output: Path to LaMAR registered image with robust flag (optional)
+        ants_default_output: Path to ANTs registered image with default parameters (optional)
 
     Returns:
         Dictionary with results for all metrics
@@ -152,6 +285,22 @@ def compare_registration_quality(lamar_output, ants_output, fixed_img):
     ants_img_data = ants_img_nib.get_fdata()
     fixed_img_data = fixed_img_nib.get_fdata()
 
+    # Load robust LAMAReg and ANTs default if provided
+    lamar_robust_data = None
+    lamar_robust_tensor = None
+    ants_default_data = None
+    ants_default_tensor = None
+    
+    if lamar_robust_output is not None:
+        lamar_robust_nib = nib.load(lamar_robust_output)
+        lamar_robust_data = lamar_robust_nib.get_fdata()
+        lamar_robust_tensor = torch.from_numpy(lamar_robust_data).float().unsqueeze(0).unsqueeze(0)
+        
+    if ants_default_output is not None:
+        ants_default_nib = nib.load(ants_default_output)
+        ants_default_data = ants_default_nib.get_fdata()
+        ants_default_tensor = torch.from_numpy(ants_default_data).float().unsqueeze(0).unsqueeze(0)
+
     # Convert to PyTorch tensors
     lamar_tensor = torch.from_numpy(lamar_img_data).float()
     ants_tensor = torch.from_numpy(ants_img_data).float()
@@ -164,43 +313,68 @@ def compare_registration_quality(lamar_output, ants_output, fixed_img):
 
     results = {}
 
-    # Calculate NMI scores (always calculate as fallback)
-    def normalized_mutual_information(img1, img2, bins=32):
-        img1_flat = img1.flatten()
-        img2_flat = img2.flatten()
-        hist_joint, _, _ = np.histogram2d(img1_flat, img2_flat, bins=bins)
-        hist_img1 = np.sum(hist_joint, axis=1)
-        hist_img2 = np.sum(hist_joint, axis=0)
-        p_img1 = hist_img1 / np.sum(hist_img1)
-        p_img2 = hist_img2 / np.sum(hist_img2)
-        p_joint = hist_joint / np.sum(hist_joint)
-        eps = np.finfo(float).eps
-        h_img1 = -np.sum(p_img1 * np.log2(p_img1 + eps))
-        h_img2 = -np.sum(p_img2 * np.log2(p_img2 + eps))
-        h_joint = -np.sum(p_joint * np.log2(p_joint + eps))
-        return (h_img1 + h_img2) / h_joint if h_joint > 0 else 0
+    # Calculate Mutual Information using ANTsPy
+    def mutual_information(img1, img2, bins=32):
+        """Calculate mutual information between two images using ANTsPy."""
+        # Convert numpy arrays to ANTs images
+        img1_ants = ants.from_numpy(img1.astype(np.float32))
+        img2_ants = ants.from_numpy(img2.astype(np.float32))
+        
+        # Calculate mutual information directly with ANTsPy
+        return ants.image_mutual_information(img1_ants, img2_ants)
 
-    results["nmi"] = {
-        "lamar": normalized_mutual_information(lamar_img_data, fixed_img_data),
-        "ants": normalized_mutual_information(ants_img_data, fixed_img_data),
+    # Calculate ANTSNeighborhoodCorrelation using ANTsPy
+    def ants_neighborhood_correlation(img1, img2):
+        """Calculate ANTSNeighborhoodCorrelation between two images using ANTsPy."""
+        # Convert numpy arrays to ANTs images
+        img1_ants = ants.from_numpy(img1.astype(np.float32))
+        img2_ants = ants.from_numpy(img2.astype(np.float32))
+        
+        # Use ANTSNeighborhoodCorrelation metric directly
+        similarity = ants.image_similarity(img1_ants, img2_ants, metric_type='ANTSNeighborhoodCorrelation')
+        
+        return similarity
+
+    # Calculate and store MI
+    results["mi"] = {
+        "lamar": mutual_information(lamar_img_data, fixed_img_data),
+        "ants": mutual_information(ants_img_data, fixed_img_data),
     }
+    
+    # Calculate and store ANTSNeighborhoodCorrelation
+    results["antsneighborhoodcorrelation"] = {
+        "lamar": ants_neighborhood_correlation(lamar_img_data, fixed_img_data),
+        "ants": ants_neighborhood_correlation(ants_img_data, fixed_img_data),
+    }
+    
+    # Add robust and default results if available
+    if lamar_robust_data is not None:
+        results["mi"]["lamar_robust"] = mutual_information(lamar_robust_data, fixed_img_data)
+        results["antsneighborhoodcorrelation"]["lamar_robust"] = ants_neighborhood_correlation(lamar_robust_data, fixed_img_data)
+        
+    if ants_default_data is not None:
+        results["mi"]["ants_default"] = mutual_information(ants_default_data, fixed_img_data)
+        results["antsneighborhoodcorrelation"]["ants_default"] = ants_neighborhood_correlation(ants_default_data, fixed_img_data)
 
     # Try MIND metric
     try:
-        from torch_mind import MINDLoss3D, MIND3D
+        from torch_mind import MINDLoss3D
 
-        mind_loss = MINDLoss3D(
-        )
+        mind_loss = MINDLoss3D()
 
         with torch.no_grad():
-            lamar_mind = mind_loss(
-                lamar_tensor, fixed_tensor
-            ).item()
-            ants_mind = mind_loss(
-                ants_tensor, fixed_tensor
-            ).item()
-
-        results["mind"] = {"lamar": lamar_mind, "ants": ants_mind}
+            lamar_mind = mind_loss(lamar_tensor, fixed_tensor).item()
+            ants_mind = mind_loss(ants_tensor, fixed_tensor).item()
+            
+            mind_results = {"lamar": lamar_mind, "ants": ants_mind}
+            
+            if lamar_robust_tensor is not None:
+                mind_results["lamar_robust"] = mind_loss(lamar_robust_tensor, fixed_tensor).item()
+            
+            if ants_default_tensor is not None:
+                mind_results["ants_default"] = mind_loss(ants_default_tensor, fixed_tensor).item()
+            
+            results["mind"] = mind_results
     except Exception as e:
         print(f"Error calculating MIND: {e}")
         results["mind"] = None
@@ -220,8 +394,16 @@ def compare_registration_quality(lamar_output, ants_output, fixed_img):
         with torch.no_grad():
             lamar_ngf = ngf(lamar_tensor, fixed_tensor).item()
             ants_ngf = ngf(ants_tensor, fixed_tensor).item()
-
-        results["ngf"] = {"lamar": lamar_ngf, "ants": ants_ngf}
+            
+            ngf_results = {"lamar": lamar_ngf, "ants": ants_ngf}
+            
+            if lamar_robust_tensor is not None:
+                ngf_results["lamar_robust"] = ngf(lamar_robust_tensor, fixed_tensor).item()
+                
+            if ants_default_tensor is not None:
+                ngf_results["ants_default"] = ngf(ants_default_tensor, fixed_tensor).item()
+            
+            results["ngf"] = ngf_results
     except Exception as e:
         print(f"Error calculating NGF: {e}")
         results["ngf"] = None

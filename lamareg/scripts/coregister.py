@@ -48,6 +48,7 @@ import argparse
 import shutil
 import sys
 from colorama import init, Fore, Style
+import os
 
 init()
 
@@ -167,34 +168,32 @@ def ants_linear_nonlinear_registration(
         fixed=fixed,
         moving=moving,
         type_of_transform=registration_method,
-        interpolator=interpolator,
+        # interpolator=interpolator,
         initial_transform=initial_transform,
         **kwargs,  # Pass through all additional arguments
     )
-
-    # The result of the registration is a dictionary containing, among other keys:
-    transformlist = []
-    if initial_transform is not None:
-        # If initial transforms were provided, prepend them to the transform list
-        transformlist.append(initial_transform)
-    # Add the forward transforms (warp and affine)
-    transformlist.append(transforms["fwdtransforms"])
-
+    print("Applying transforms...")
     registered = ants.apply_transforms(
         fixed=fixed,
         moving=moving,
         transformlist=transforms["fwdtransforms"],
         interpolator=interpolator,
     )
-
+    print("Transforms applied successfully.")
     # Save the registered moving image
     if out_file is not None:
         ants.image_write(registered, out_file)
         print(f"Registration complete. Saved registered image as {out_file}")
 
     if warp_file:
-        shutil.copyfile(transforms["fwdtransforms"][0], warp_file)
-        print(f"Saved warp field as {warp_file}")
+        if transforms["fwdtransforms"][1].endswith(".nii.gz"):
+            shutil.copyfile(transforms["fwdtransforms"][1], warp_file.replace(".nii.gz", "_stage1.nii.gz"))
+            print(f"Saved warp field as {warp_file}")
+            shutil.copyfile(transforms["fwdtransforms"][0], warp_file.replace(".nii.gz", "_stage2.nii.gz"))
+            print(f"Saved warp field as {warp_file}")
+        else:
+            shutil.copyfile(transforms["fwdtransforms"][0], warp_file)
+            print(f"Saved warp field as {warp_file}")
     if affine_file:
         shutil.copyfile(transforms["fwdtransforms"][1], affine_file)
         print(f"Saved affine transform as {affine_file}")
@@ -204,6 +203,18 @@ def ants_linear_nonlinear_registration(
     if rev_affine_file:
         shutil.copyfile(transforms["invtransforms"][0], rev_affine_file)
         print(f"Saved reverse affine transform as {rev_affine_file}")
+    print("All specified outputs saved successfully.")
+    print("Cleaning up temporary files...")
+    temp_files_to_delete = set(transforms['fwdtransforms'] + transforms['invtransforms'])
+    deleted_count = 0
+    for temp_file in temp_files_to_delete:
+        try:
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+                deleted_count += 1
+        except OSError as e:
+            print(f"Warning: Could not remove temporary file {temp_file}: {e}")
+    print(f"Successfully cleaned up {deleted_count} temporary files.")
 
 
 def main():

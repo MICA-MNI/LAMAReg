@@ -7,12 +7,14 @@ import torch
 from runtest import (
     run_lamar_registration,
     run_direct_ants_registration,
+    run_lamar_registration_robust,
+    run_direct_ants_registration_default,
     compare_registration_quality,
 )
 from torch_mind import MIND3D
 
 
-def save_mind_descriptors(moving_img, fixed_img, lamar_output, ants_output, output_dir):
+def save_mind_descriptors(moving_img, fixed_img, lamar_output, ants_output, output_dir, lamar_robust_output=None, ants_default_output=None):
     """Extract and save MIND descriptors as multi-channel NIfTI images."""
     print("    Generating MIND descriptor visualizations...")
 
@@ -23,11 +25,26 @@ def save_mind_descriptors(moving_img, fixed_img, lamar_output, ants_output, outp
     lamar_data = lamar_nib.get_fdata()
     ants_nib = nib.load(ants_output)
     ants_data = ants_nib.get_fdata()
+    
+    # Load optional images
+    lamar_robust_data = None
+    ants_default_data = None
+    if lamar_robust_output:
+        lamar_robust_nib = nib.load(lamar_robust_output)
+        lamar_robust_data = lamar_robust_nib.get_fdata()
+    if ants_default_output:
+        ants_default_nib = nib.load(ants_default_output)
+        ants_default_data = ants_default_nib.get_fdata()
 
     # Convert to tensors with batch dimension for MIND
     fixed_tensor = torch.from_numpy(fixed_data).float().unsqueeze(0).unsqueeze(0)
     lamar_tensor = torch.from_numpy(lamar_data).float().unsqueeze(0).unsqueeze(0)
     ants_tensor = torch.from_numpy(ants_data).float().unsqueeze(0).unsqueeze(0)
+    
+    if lamar_robust_data is not None:
+        lamar_robust_tensor = torch.from_numpy(lamar_robust_data).float().unsqueeze(0).unsqueeze(0)
+    if ants_default_data is not None:
+        ants_default_tensor = torch.from_numpy(ants_default_data).float().unsqueeze(0).unsqueeze(0)
 
     # Create MIND descriptor
     mind_descriptor = MIND3D(patch_size=3, sigma=0.5)
@@ -37,31 +54,38 @@ def save_mind_descriptors(moving_img, fixed_img, lamar_output, ants_output, outp
         mind_fixed = mind_descriptor(fixed_tensor)
         mind_lamar = mind_descriptor(lamar_tensor)
         mind_ants = mind_descriptor(ants_tensor)
+        if lamar_robust_data is not None:
+            mind_lamar_robust = mind_descriptor(lamar_robust_tensor)
+        if ants_default_data is not None:
+            mind_ants_default = mind_descriptor(ants_default_tensor)
 
     # Create output directory for MIND visualizations
     mind_dir = os.path.join(output_dir, "mind_descriptors")
     os.makedirs(mind_dir, exist_ok=True)
 
-    # Convert from PyTorch tensors to NumPy arrays
-    # Move channels dimension to the end (NIfTI convention)
-    # From [B,C,D,H,W] to [D,H,W,C]
+    # Convert from PyTorch tensors to NumPy arrays and save
     fixed_mind_data = np.transpose(mind_fixed[0].numpy(), (1, 2, 3, 0))
-    lamar_mind_data = np.transpose(mind_lamar[0].numpy(), (1, 2, 3, 0))
-    ants_mind_data = np.transpose(mind_ants[0].numpy(), (1, 2, 3, 0))
-
-    # Save multi-channel MIND descriptors as NIfTI files
-    fixed_mind_nii = nib.Nifti1Image(
-        fixed_mind_data, fixed_nib.affine, fixed_nib.header
-    )
+    fixed_mind_nii = nib.Nifti1Image(fixed_mind_data, fixed_nib.affine, fixed_nib.header)
     nib.save(fixed_mind_nii, os.path.join(mind_dir, "fixed_mind.nii.gz"))
 
-    lamar_mind_nii = nib.Nifti1Image(
-        lamar_mind_data, lamar_nib.affine, lamar_nib.header
-    )
+    lamar_mind_data = np.transpose(mind_lamar[0].numpy(), (1, 2, 3, 0))
+    lamar_mind_nii = nib.Nifti1Image(lamar_mind_data, lamar_nib.affine, lamar_nib.header)
     nib.save(lamar_mind_nii, os.path.join(mind_dir, "lamar_mind.nii.gz"))
 
+    ants_mind_data = np.transpose(mind_ants[0].numpy(), (1, 2, 3, 0))
     ants_mind_nii = nib.Nifti1Image(ants_mind_data, ants_nib.affine, ants_nib.header)
     nib.save(ants_mind_nii, os.path.join(mind_dir, "ants_mind.nii.gz"))
+    
+    # Save optional mind descriptors
+    if lamar_robust_data is not None:
+        lamar_robust_mind_data = np.transpose(mind_lamar_robust[0].numpy(), (1, 2, 3, 0))
+        lamar_robust_mind_nii = nib.Nifti1Image(lamar_robust_mind_data, lamar_robust_nib.affine, lamar_robust_nib.header)
+        nib.save(lamar_robust_mind_nii, os.path.join(mind_dir, "lamar_robust_mind.nii.gz"))
+        
+    if ants_default_data is not None:
+        ants_default_mind_data = np.transpose(mind_ants_default[0].numpy(), (1, 2, 3, 0))
+        ants_default_mind_nii = nib.Nifti1Image(ants_default_mind_data, ants_default_nib.affine, ants_default_nib.header)
+        nib.save(ants_default_mind_nii, os.path.join(mind_dir, "ants_default_mind.nii.gz"))
 
     print(f"    MIND descriptors saved in {mind_dir}")
     return mind_dir
@@ -72,6 +96,22 @@ def normalize_for_vis(array):
     min_val = np.min(array)
     max_val = np.max(array)
     return (array - min_val) / (max_val - min_val + 1e-8)
+
+
+def check_session_completed(output_dir):
+    """Check if all registration outputs already exist for this session."""
+    required_files = [
+        "lamar_registered.nii.gz",
+        "lamar_robust_registered.nii.gz",
+        "direct_ants_registered.nii.gz",
+        "direct_ants_default_registered.nii.gz"
+    ]
+    
+    for file in required_files:
+        if not os.path.exists(os.path.join(output_dir, file)):
+            return False
+    
+    return True
 
 
 def main():
@@ -98,6 +138,9 @@ def main():
     parser.add_argument(
         "--save-mind", action="store_true", help="Save MIND descriptor visualizations"
     )
+    parser.add_argument(
+        "--force", action="store_true", help="Force reprocessing of completed sessions"
+    )
     args = parser.parse_args()
 
     # Create output directory
@@ -109,14 +152,29 @@ def main():
         "subject_id",
         "session_id",
         "lamar_time",
+        "lamar_robust_time",
         "ants_time",
-        "speedup",
-        "nmi_lamar",
-        "nmi_ants",
+        "ants_default_time",
+        "speedup_lamar_vs_ants",
+        "speedup_robust_vs_ants",
+        "speedup_lamar_vs_ants_default",
+        "speedup_robust_vs_ants_default",
+        "mi_lamar",
+        "mi_lamar_robust",
+        "mi_ants",
+        "mi_ants_default",
+        "antsneighborhoodcorrelation_lamar",
+        "antsneighborhoodcorrelation_lamar_robust",
+        "antsneighborhoodcorrelation_ants",
+        "antsneighborhoodcorrelation_ants_default",
         "mind_lamar",
+        "mind_lamar_robust",
         "mind_ants",
+        "mind_ants_default",
         "ngf_lamar",
+        "ngf_lamar_robust",
         "ngf_ants",
+        "ngf_ants_default",
         "mind_descriptors_dir",
     ]
 
@@ -172,13 +230,45 @@ def main():
 
                 # Only proceed if both scans exist
                 if t1w_file and dwi_file:
-                    print(f"    Found both T1w and DWI scans, performing registration")
+                    print(f"    Found both T1w and DWI scans")
 
                     # Create subject-specific output directory
                     subj_output_dir = os.path.join(
                         args.output_dir, f"{subject_folder}_{session_folder}"
                     )
                     os.makedirs(subj_output_dir, exist_ok=True)
+                    
+                    # Check if this session has already been processed
+                    is_completed = check_session_completed(subj_output_dir)
+                    print(f"    Checking if session {subject_folder}_{session_folder} is completed: {is_completed}. {subj_output_dir}")
+
+                    if is_completed and not args.force:
+                        print(f"    Session {subject_folder}_{session_folder} has already been processed. Skipping.")
+                        print(f"    (Use --force to reprocess completed sessions)")
+                        
+                        # Define paths to existing registration outputs
+                        lamar_output = os.path.join(subj_output_dir, "lamar_registered.nii.gz")
+                        lamar_robust_output = os.path.join(subj_output_dir, "lamar_robust_registered.nii.gz")
+                        ants_output = os.path.join(subj_output_dir, "ants_registered.nii.gz")
+                        ants_default_output = os.path.join(subj_output_dir, "ants_default_registered.nii.gz")
+                        
+                        # We can still regenerate metrics from existing outputs if needed
+                        print("    Re-calculating quality metrics from existing outputs...")
+                        quality_results = compare_registration_quality(
+                            lamar_output=lamar_output,
+                            ants_output=ants_output,
+                            fixed_img=t1w_file,
+                            lamar_robust_output=lamar_robust_output,
+                            ants_default_output=ants_default_output
+                        )
+                        
+                        # Read times from CSV if needed for display
+                        # (This is optional, depends on whether you want to show stats for skipped sessions)
+                        # For now we'll just continue to the next session
+                        continue
+                    
+                    # If not completed or force flag is set, run the registrations
+                    print(f"    Performing registration...")
 
                     # Run LaMAR registration (DWI to T1w)
                     print("    Running LaMAR registration...")
@@ -190,10 +280,10 @@ def main():
                         threads=args.threads,
                         verbose=not args.quiet,
                     )
-
-                    # Run Direct ANTs registration
-                    print("    Running ANTs registration...")
-                    ants_time, ants_output = run_direct_ants_registration(
+                    
+                    # Run LaMAR robust registration (DWI to T1w)
+                    print("    Running LaMAR registration with robust flag...")
+                    lamar_robust_time, lamar_robust_output = run_lamar_registration_robust(
                         moving_img=dwi_file,
                         fixed_img=t1w_file,
                         output_dir=subj_output_dir,
@@ -202,35 +292,78 @@ def main():
                         verbose=not args.quiet,
                     )
 
-                    # Compare registration quality
+                    # Run Direct ANTs registration with custom parameters
+                    print("    Running ANTs registration with custom parameters...")
+                    ants_time, ants_output = run_direct_ants_registration(
+                        moving_img=dwi_file,
+                        fixed_img=t1w_file,
+                        output_dir=subj_output_dir,
+                        registration_method=args.registration_method,
+                        threads=args.threads,
+                        verbose=not args.quiet,
+                    )
+                    
+                    # Run Direct ANTs registration with default parameters
+                    print("    Running ANTs registration with default parameters...")
+                    ants_default_time, ants_default_output = run_direct_ants_registration_default(
+                        moving_img=dwi_file,
+                        fixed_img=t1w_file,
+                        output_dir=subj_output_dir,
+                        registration_method=args.registration_method,
+                        threads=args.threads,
+                        verbose=not args.quiet,
+                    )
+
+                    # Compare registration quality for all four methods
                     print("    Comparing registration quality...")
                     quality_results = compare_registration_quality(
                         lamar_output=lamar_output,
                         ants_output=ants_output,
                         fixed_img=t1w_file,
+                        lamar_robust_output=lamar_robust_output,
+                        ants_default_output=ants_default_output
                     )
 
-                    # Calculate speedup
-                    speedup = ants_time / lamar_time if lamar_time > 0 else 0
+                    # Calculate speedups
+                    speedup_lamar_vs_ants = ants_time / lamar_time if lamar_time > 0 else 0
+                    speedup_robust_vs_ants = ants_time / lamar_robust_time if lamar_robust_time > 0 else 0
+                    speedup_lamar_vs_ants_default = ants_default_time / lamar_time if lamar_time > 0 else 0
+                    speedup_robust_vs_ants_default = ants_default_time / lamar_robust_time if lamar_robust_time > 0 else 0
 
-                    # Get metrics (handle cases where metrics might not be available)
-                    nmi = quality_results.get("nmi", {})
+                    # Get metrics
+                    mi = quality_results.get("mi", {})
+                    antsneighborhoodcorrelation = quality_results.get("antsneighborhoodcorrelation", {})
                     mind = quality_results.get("mind", {})
                     ngf = quality_results.get("ngf", {})
 
-                    # Create row data
+                    # Create row data with all four methods
                     row_data = {
                         "subject_id": subject_folder,
                         "session_id": session_folder,
                         "lamar_time": f"{lamar_time:.2f}",
+                        "lamar_robust_time": f"{lamar_robust_time:.2f}",
                         "ants_time": f"{ants_time:.2f}",
-                        "speedup": f"{speedup:.2f}",
-                        "nmi_lamar": f"{nmi.get('lamar', 'N/A')}" if nmi else "N/A",
-                        "nmi_ants": f"{nmi.get('ants', 'N/A')}" if nmi else "N/A",
+                        "ants_default_time": f"{ants_default_time:.2f}",
+                        "speedup_lamar_vs_ants": f"{speedup_lamar_vs_ants:.2f}",
+                        "speedup_robust_vs_ants": f"{speedup_robust_vs_ants:.2f}",
+                        "speedup_lamar_vs_ants_default": f"{speedup_lamar_vs_ants_default:.2f}",
+                        "speedup_robust_vs_ants_default": f"{speedup_robust_vs_ants_default:.2f}",
+                        "mi_lamar": f"{mi.get('lamar', 'N/A')}" if mi else "N/A",
+                        "mi_lamar_robust": f"{mi.get('lamar_robust', 'N/A')}" if mi else "N/A",
+                        "mi_ants": f"{mi.get('ants', 'N/A')}" if mi else "N/A",
+                        "mi_ants_default": f"{mi.get('ants_default', 'N/A')}" if mi else "N/A",
+                        "antsneighborhoodcorrelation_lamar": f"{antsneighborhoodcorrelation.get('lamar', 'N/A')}" if antsneighborhoodcorrelation else "N/A",
+                        "antsneighborhoodcorrelation_lamar_robust": f"{antsneighborhoodcorrelation.get('lamar_robust', 'N/A')}" if antsneighborhoodcorrelation else "N/A",
+                        "antsneighborhoodcorrelation_ants": f"{antsneighborhoodcorrelation.get('ants', 'N/A')}" if antsneighborhoodcorrelation else "N/A",
+                        "antsneighborhoodcorrelation_ants_default": f"{antsneighborhoodcorrelation.get('ants_default', 'N/A')}" if antsneighborhoodcorrelation else "N/A",
                         "mind_lamar": f"{mind.get('lamar', 'N/A')}" if mind else "N/A",
+                        "mind_lamar_robust": f"{mind.get('lamar_robust', 'N/A')}" if mind else "N/A",
                         "mind_ants": f"{mind.get('ants', 'N/A')}" if mind else "N/A",
+                        "mind_ants_default": f"{mind.get('ants_default', 'N/A')}" if mind else "N/A",
                         "ngf_lamar": f"{ngf.get('lamar', 'N/A')}" if ngf else "N/A",
+                        "ngf_lamar_robust": f"{ngf.get('lamar_robust', 'N/A')}" if ngf else "N/A",
                         "ngf_ants": f"{ngf.get('ants', 'N/A')}" if ngf else "N/A",
+                        "ngf_ants_default": f"{ngf.get('ants_default', 'N/A')}" if ngf else "N/A",
                     }
 
                     # Extract and save MIND descriptors if requested
@@ -249,21 +382,17 @@ def main():
                         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                         writer.writerow(row_data)
 
-                    print(
-                        f"    Quality metrics: NMI (LaMAR: {nmi.get('lamar', 'N/A')}, ANTs: {nmi.get('ants', 'N/A')})"
-                    )
-                    print(
-                        f"    MIND (LaMAR: {mind.get('lamar', 'N/A')}, ANTs: {mind.get('ants', 'N/A')})"
-                    )
-                    print(
-                        f"    NGF (LaMAR: {ngf.get('lamar', 'N/A')}, ANTs: {ngf.get('ants', 'N/A')})"
-                    )
-                    print(
-                        f"    Completed registration for {subject_folder}_{session_folder}"
-                    )
-                    print(
-                        f"    LaMAR time: {lamar_time:.2f}s, ANTs time: {ants_time:.2f}s, Speedup: {speedup:.2f}x"
-                    )
+                    # Print results for all four methods
+                    print(f"    Quality metrics:")
+                    print(f"      MI (LaMAR: {mi.get('lamar', 'N/A')}, LaMAR robust: {mi.get('lamar_robust', 'N/A')}, ANTs: {mi.get('ants', 'N/A')}, ANTs default: {mi.get('ants_default', 'N/A')})")
+                    print(f"      antsneighborhoodcorrelation (LaMAR: {antsneighborhoodcorrelation.get('lamar', 'N/A')}, LaMAR robust: {antsneighborhoodcorrelation.get('lamar_robust', 'N/A')}, ANTs: {antsneighborhoodcorrelation.get('ants', 'N/A')}, ANTs default: {antsneighborhoodcorrelation.get('ants_default', 'N/A')})")
+                    print(f"      MIND (LaMAR: {mind.get('lamar', 'N/A')}, LaMAR robust: {mind.get('lamar_robust', 'N/A')}, ANTs: {mind.get('ants', 'N/A')}, ANTs default: {mind.get('ants_default', 'N/A')})")
+                    print(f"      NGF (LaMAR: {ngf.get('lamar', 'N/A')}, LaMAR robust: {ngf.get('lamar_robust', 'N/A')}, ANTs: {ngf.get('ants', 'N/A')}, ANTs default: {ngf.get('ants_default', 'N/A')})")
+                    
+                    print(f"    Completed registration for {subject_folder}_{session_folder}")
+                    print(f"    Times: LaMAR: {lamar_time:.2f}s, LaMAR robust: {lamar_robust_time:.2f}s, ANTs: {ants_time:.2f}s, ANTs default: {ants_default_time:.2f}s")
+                    print(f"    Speedups vs ANTs: LaMAR: {speedup_lamar_vs_ants:.2f}x, LaMAR robust: {speedup_robust_vs_ants:.2f}x")
+                    print(f"    Speedups vs ANTs default: LaMAR: {speedup_lamar_vs_ants_default:.2f}x, LaMAR robust: {speedup_robust_vs_ants_default:.2f}x")
                     print(f"    Results appended to {results_csv}")
                 else:
                     print(f"    Missing T1w or DWI scan, skipping")

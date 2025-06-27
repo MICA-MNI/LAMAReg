@@ -37,13 +37,14 @@ class MIND3D(nn.Module):
         0.5 is the value used in the reference implementation.
     """
 
-    def __init__(self, patch_size: int = 3, sigma: float = 0.5):
+    def __init__(self, patch_size: int = 3, sigma: float = 0.5, noise_floor: float = 0.10):
         super().__init__()
         if patch_size % 2 == 0:
             raise ValueError("patch_size must be odd")
         self.patch_size = patch_size
         self.sigma2 = sigma ** 2
-
+        self.noise_floor  = noise_floor
+        
         # --------------------------- shift kernels --------------------------- #
         # Six one-hot 3×3×3 kernels that pick (+x,-x,+y,-y,+z,-z) neighbours.
         shift_kernels = torch.zeros(6, 1, 3, 3, 3)  # (out_c, in_c, D, H, W)
@@ -114,11 +115,15 @@ class MIND3D(nn.Module):
         diff = shifted - img.repeat_interleave(6, dim=1)
         Dp = self.patcher(diff.pow(2))  # (B,6,D,H,W)
 
-        # 3) local variance V(x): mean over the six channels
-        Vx = Dp.mean(dim=1, keepdim=True)  # (B,1,D,H,W)
+        # 3) local variance  V(I,x)  – Eq. 8
+        Vx = Dp.mean(dim=1, keepdim=True)                # (B,1,D,H,W)
+        # global noise estimate  V̂  – Eq. 7
+        Vg = Vx.mean(dim=[2, 3, 4], keepdim=True)        # scalar per-batch
+        # clamp to noise floor λ·V̂
+        Vx = torch.maximum(Vx, self.noise_floor * Vg)
 
-        # 4) softmax-style normalised descriptor
-        num = torch.exp(-Dp / (Vx + 1e-8))
+        # 4) descriptor: exp(-Dp / V) then ℓ¹-normalise across 6 offsets
+        num   = torch.exp(-Dp / (Vx + 1e-8))
         denom = num.sum(dim=1, keepdim=True)
         mind = num / (denom + 1e-8)
         return mind
@@ -130,9 +135,9 @@ class MIND3D(nn.Module):
 class MINDLoss3D(nn.Module):
     r"""ℓ¹ loss between two 3-D MIND volumes."""
 
-    def __init__(self, patch_size: int = 3, sigma: float = 0.5):
+    def __init__(self, patch_size: int = 3, sigma: float = 0.5, noise_floor: float = 0.10):
         super().__init__()
-        self.descriptor = MIND3D(patch_size, sigma)
+        self.descriptor = MIND3D(patch_size, sigma, noise_floor)
 
     def forward(
         self, moving: torch.Tensor, fixed: torch.Tensor
@@ -143,9 +148,8 @@ class MINDLoss3D(nn.Module):
         """
         mind_m = self.descriptor(moving)
         mind_f = self.descriptor(fixed)
-        diff = (mind_m - mind_f).abs()  # L1
-        B, C, D, H, W = diff.shape
-        return diff.sum() / (B * C * D * H * W)
+        # simple mean-absolute error; flat regions already carry ≈0 loss
+        return (mind_m - mind_f).abs().mean()
 
 
 # -----------------------------------------------------------------------------#
