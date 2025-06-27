@@ -28,12 +28,21 @@ def run_lamar_registration(
     registration_method="SyNRA",
     threads=1,
     verbose=True,
+    force=False,
 ):
     """Run registration using LaMAR CLI and measure time."""
-    start_time = time.time()
-
     # Set up output paths
     output_img = os.path.join(output_dir, "lamar_registered.nii.gz")
+    
+    # Skip if output already exists and not forced to rerun
+    if os.path.exists(output_img) and not force:
+        if verbose:
+            print(f"Output {output_img} already exists. Skipping LaMAR registration.")
+        return 0.0, output_img
+    
+    start_time = time.time()
+
+    # Setup paths for intermediate files
     moving_parc = os.path.join(output_dir, "moving_parc.nii.gz")
     fixed_parc = os.path.join(output_dir, "fixed_parc.nii.gz")
     registered_parc = os.path.join(output_dir, "registered_parc.nii.gz")
@@ -66,9 +75,6 @@ def run_lamar_registration(
         "--ants-threads",
         str(threads),
         "--skip-qc",
-        # "--skip-fixed-parc",
-        # "--skip-moving-parc",
-
     ]
 
     # Run LaMAR registration
@@ -88,12 +94,21 @@ def run_lamar_registration_robust(
     registration_method="SyNRA",
     threads=1,
     verbose=True,
+    force=False,
 ):
     """Run registration using LaMAR coregister with initial transform and measure time."""
-    start_time = time.time()
-
     # Set up output paths
     output_img = os.path.join(output_dir, "lamar_robust_registered.nii.gz")
+    
+    # Skip if output already exists and not forced to rerun
+    if os.path.exists(output_img) and not force:
+        if verbose:
+            print(f"Output {output_img} already exists. Skipping LaMAR robust registration.")
+        return 0.0, output_img
+    
+    start_time = time.time()
+
+    # Setup paths for intermediate files
     registered_parc = os.path.join(output_dir, "registered_parc_robust.nii.gz")
     affine_file = os.path.join(output_dir, "lamar_robust_affine.mat")
     warp_file = os.path.join(output_dir, "lamar_robust_warp.nii.gz")
@@ -145,14 +160,20 @@ def run_direct_ants_registration(
     registration_method="SyNRA",
     threads=1,
     verbose=True,
+    force=False,
 ):
     """Run direct ANTs registration via ANTsPyX and measure time."""
-    import ants
-
-    start_time = time.time()
-
     # Set up output paths
     output_img = os.path.join(output_dir, "direct_ants_registered.nii.gz")
+    
+    # Skip if output already exists and not forced to rerun
+    if os.path.exists(output_img) and not force:
+        if verbose:
+            print(f"Output {output_img} already exists. Skipping ANTs registration.")
+        return 0.0, output_img
+    
+    import ants
+    start_time = time.time()
 
     env = os.environ.copy()
     # Set ANTs/ITK thread count
@@ -207,14 +228,20 @@ def run_direct_ants_registration_default(
     registration_method="SyNRA",
     threads=1,
     verbose=True,
+    force=False,
 ):
     """Run direct ANTs registration via ANTsPyX with default parameters and measure time."""
-    import ants
-
-    start_time = time.time()
-
     # Set up output paths
     output_img = os.path.join(output_dir, "direct_ants_default_registered.nii.gz")
+    
+    # Skip if output already exists and not forced to rerun
+    if os.path.exists(output_img) and not force:
+        if verbose:
+            print(f"Output {output_img} already exists. Skipping ANTs default registration.")
+        return 0.0, output_img
+    
+    import ants
+    start_time = time.time()
 
     env = os.environ.copy()
     # Set ANTs/ITK thread count
@@ -262,7 +289,153 @@ def run_direct_ants_registration_default(
     return elapsed_time, output_img
 
 
-def compare_registration_quality(lamar_output, ants_output, fixed_img, lamar_robust_output=None, ants_default_output=None):
+def run_direct_ants_registration_medium_iters(
+    moving_img,
+    fixed_img,
+    output_dir,
+    registration_method="SyNRA",
+    threads=1,
+    verbose=True,
+    force=False,
+):
+    """Run direct ANTs registration via ANTsPyX with medium iterations (40,20,10) and measure time."""
+    # Set up output paths
+    output_img = os.path.join(output_dir, "direct_ants_medium_registered.nii.gz")
+    
+    # Skip if output already exists and not forced to rerun
+    if os.path.exists(output_img) and not force:
+        if verbose:
+            print(f"Output {output_img} already exists. Skipping ANTs medium registration.")
+        return 0.0, output_img
+    
+    import ants
+    start_time = time.time()
+
+    env = os.environ.copy()
+    # Set ANTs/ITK thread count
+    env["ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS"] = str(threads)
+    env["OMP_NUM_THREADS"] = str(threads)  # OpenMP threads for ANTs
+
+    # Load images
+    fixed_image = ants.image_read(fixed_img)
+    moving_image = ants.image_read(moving_img)
+
+    # Map registration method to ANTs type
+    type_of_transform = registration_method
+
+    # Log if verbose
+    if verbose:
+        print(f"Running ANTsPyX registration with medium iterations (40,20,10), method: {type_of_transform}")
+        print(f"Thread count: {threads}")
+        print(f"Moving image: {moving_img}")
+        print(f"Fixed image: {fixed_img}")
+
+    # Perform registration with medium iterations
+    registration = ants.registration(
+        fixed=fixed_image,
+        moving=moving_image,
+        type_of_transform=type_of_transform,
+        verbose=verbose,
+        reg_iterations=(40, 20, 10)  # Medium level of iterations
+    )
+
+    # Save outputs
+    ants.image_write(registration["warpedmovout"], output_img)
+
+    temp_files_to_delete = set(registration['fwdtransforms'] + registration['invtransforms'])
+    deleted_count = 0
+    for temp_file in temp_files_to_delete:
+        try:
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+                deleted_count += 1
+        except OSError as e:
+            print(f"Warning: Could not remove temporary file {temp_file}: {e}")
+    print(f"Successfully cleaned up {deleted_count} temporary files.")
+
+    elapsed_time = time.time() - start_time
+    return elapsed_time, output_img
+
+
+def run_fsl_registration(
+    moving_img,
+    fixed_img,
+    output_dir,
+    threads=1,
+    verbose=True,
+    force=False,
+):
+    """Run registration using FSL's epi_reg (BBR) and measure time."""
+    # Import here to avoid requiring FSL for other functions
+    from fsl.wrappers import epi_reg, fslmaths, bet, flirt
+    
+    # Set up output paths
+    output_img = os.path.join(output_dir, "fsl_registered.nii.gz")
+    
+    # Skip if output already exists and not forced to rerun
+    if os.path.exists(output_img) and not force:
+        if verbose:
+            print(f"Output {output_img} already exists. Skipping FSL registration.")
+        return 0.0, output_img
+    
+    start_time = time.time()
+    
+    # Set up paths for intermediate files
+    t1_brain = os.path.join(output_dir, "t1_brain.nii.gz")
+    epi_reg_prefix = os.path.join(output_dir, "fsl_epi_reg")
+    
+    try:
+        # FSL requires brain-extracted T1 for epi_reg
+        if not os.path.exists(t1_brain):
+            if verbose:
+                print("Brain-extracting T1 image...")
+            bet(fixed_img, t1_brain, f=0.5)
+        
+        # Set FSLPARALLEL if using multiple threads
+        if threads > 1:
+            os.environ["FSLPARALLEL"] = str(threads)
+            os.environ['OMP_NUM_THREADS'] = str(threads)
+            os.environ['FSLNUMTHREADS'] = str(threads)
+        
+        # Run epi_reg to perform EPI to T1 registration using BBR
+        if verbose:
+            print(f"Running FSL epi_reg with BBR...")
+        
+        # Run epi_reg to generate transformation
+        epi_reg(
+            epi=moving_img,
+            t1=fixed_img,
+            t1brain=t1_brain,
+            out=epi_reg_prefix
+        )
+        
+        # Apply the transformation
+        affine_mat = f"{epi_reg_prefix}.mat"
+        
+        if verbose:
+            print(f"Applying FSL transformation...")
+        
+        flirt(
+            moving_img,
+            fixed_img,
+            out=output_img,
+            init=affine_mat,
+            applyxfm=True
+        )
+        
+    except Exception as e:
+        print(f"Error during FSL registration: {e}")
+        if os.path.exists(output_img):
+            os.remove(output_img)
+        elapsed_time = time.time() - start_time
+        return elapsed_time, None
+    
+    elapsed_time = time.time() - start_time
+    return elapsed_time, output_img
+
+
+def compare_registration_quality(lamar_output, ants_output, fixed_img, lamar_robust_output=None, 
+                               ants_default_output=None, ants_medium_output=None, fsl_output=None):
     """Compare the registration quality using all available metrics.
 
     Args:
@@ -271,6 +444,8 @@ def compare_registration_quality(lamar_output, ants_output, fixed_img, lamar_rob
         fixed_img: Path to fixed reference image
         lamar_robust_output: Path to LaMAR registered image with robust flag (optional)
         ants_default_output: Path to ANTs registered image with default parameters (optional)
+        ants_medium_output: Path to ANTs registered image with medium iterations (optional)
+        fsl_output: Path to FSL registered image (optional)
 
     Returns:
         Dictionary with results for all metrics
@@ -285,11 +460,15 @@ def compare_registration_quality(lamar_output, ants_output, fixed_img, lamar_rob
     ants_img_data = ants_img_nib.get_fdata()
     fixed_img_data = fixed_img_nib.get_fdata()
 
-    # Load robust LAMAReg and ANTs default if provided
+    # Load robust LAMAReg, ANTs variants and FSL if provided
     lamar_robust_data = None
     lamar_robust_tensor = None
     ants_default_data = None
     ants_default_tensor = None
+    ants_medium_data = None
+    ants_medium_tensor = None
+    fsl_data = None
+    fsl_tensor = None
     
     if lamar_robust_output is not None:
         lamar_robust_nib = nib.load(lamar_robust_output)
@@ -300,7 +479,17 @@ def compare_registration_quality(lamar_output, ants_output, fixed_img, lamar_rob
         ants_default_nib = nib.load(ants_default_output)
         ants_default_data = ants_default_nib.get_fdata()
         ants_default_tensor = torch.from_numpy(ants_default_data).float().unsqueeze(0).unsqueeze(0)
-
+        
+    if ants_medium_output is not None:
+        ants_medium_nib = nib.load(ants_medium_output)
+        ants_medium_data = ants_medium_nib.get_fdata()
+        ants_medium_tensor = torch.from_numpy(ants_medium_data).float().unsqueeze(0).unsqueeze(0)
+        
+    if fsl_output is not None:
+        fsl_nib = nib.load(fsl_output)
+        fsl_data = fsl_nib.get_fdata()
+        fsl_tensor = torch.from_numpy(fsl_data).float().unsqueeze(0).unsqueeze(0)
+    
     # Convert to PyTorch tensors
     lamar_tensor = torch.from_numpy(lamar_img_data).float()
     ants_tensor = torch.from_numpy(ants_img_data).float()
@@ -347,7 +536,7 @@ def compare_registration_quality(lamar_output, ants_output, fixed_img, lamar_rob
         "ants": ants_neighborhood_correlation(ants_img_data, fixed_img_data),
     }
     
-    # Add robust and default results if available
+    # Add robust, default, medium ANTs and FSL results if available
     if lamar_robust_data is not None:
         results["mi"]["lamar_robust"] = mutual_information(lamar_robust_data, fixed_img_data)
         results["antsneighborhoodcorrelation"]["lamar_robust"] = ants_neighborhood_correlation(lamar_robust_data, fixed_img_data)
@@ -355,7 +544,15 @@ def compare_registration_quality(lamar_output, ants_output, fixed_img, lamar_rob
     if ants_default_data is not None:
         results["mi"]["ants_default"] = mutual_information(ants_default_data, fixed_img_data)
         results["antsneighborhoodcorrelation"]["ants_default"] = ants_neighborhood_correlation(ants_default_data, fixed_img_data)
-
+        
+    if ants_medium_data is not None:
+        results["mi"]["ants_medium"] = mutual_information(ants_medium_data, fixed_img_data)
+        results["antsneighborhoodcorrelation"]["ants_medium"] = ants_neighborhood_correlation(ants_medium_data, fixed_img_data)
+        
+    if fsl_data is not None:
+        results["mi"]["fsl"] = mutual_information(fsl_data, fixed_img_data)
+        results["antsneighborhoodcorrelation"]["fsl"] = ants_neighborhood_correlation(fsl_data, fixed_img_data)
+        
     # Try MIND metric
     try:
         from torch_mind import MINDLoss3D
@@ -373,6 +570,12 @@ def compare_registration_quality(lamar_output, ants_output, fixed_img, lamar_rob
             
             if ants_default_tensor is not None:
                 mind_results["ants_default"] = mind_loss(ants_default_tensor, fixed_tensor).item()
+                
+            if ants_medium_tensor is not None:
+                mind_results["ants_medium"] = mind_loss(ants_medium_tensor, fixed_tensor).item()
+                
+            if fsl_tensor is not None:
+                mind_results["fsl"] = mind_loss(fsl_tensor, fixed_tensor).item()
             
             results["mind"] = mind_results
     except Exception as e:
@@ -402,6 +605,12 @@ def compare_registration_quality(lamar_output, ants_output, fixed_img, lamar_rob
                 
             if ants_default_tensor is not None:
                 ngf_results["ants_default"] = ngf(ants_default_tensor, fixed_tensor).item()
+                
+            if ants_medium_tensor is not None:
+                ngf_results["ants_medium"] = ngf(ants_medium_tensor, fixed_tensor).item()
+                
+            if fsl_tensor is not None:
+                ngf_results["fsl"] = ngf(fsl_tensor, fixed_tensor).item()
             
             results["ngf"] = ngf_results
     except Exception as e:

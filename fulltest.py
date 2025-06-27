@@ -9,6 +9,8 @@ from runtest import (
     run_direct_ants_registration,
     run_lamar_registration_robust,
     run_direct_ants_registration_default,
+    run_direct_ants_registration_medium_iters,
+    run_fsl_registration,  # Add FSL registration import
     compare_registration_quality,
 )
 from torch_mind import MIND3D
@@ -66,7 +68,7 @@ def save_mind_descriptors(moving_img, fixed_img, lamar_output, ants_output, outp
     # Convert from PyTorch tensors to NumPy arrays and save
     fixed_mind_data = np.transpose(mind_fixed[0].numpy(), (1, 2, 3, 0))
     fixed_mind_nii = nib.Nifti1Image(fixed_mind_data, fixed_nib.affine, fixed_nib.header)
-    nib.save(fixed_mind_nii, os.path.join(mind_dir, "fixed_mind.nii.gz"))
+    nib.save(fixed_mind_ii, os.path.join(mind_dir, "fixed_mind.nii.gz"))
 
     lamar_mind_data = np.transpose(mind_lamar[0].numpy(), (1, 2, 3, 0))
     lamar_mind_nii = nib.Nifti1Image(lamar_mind_data, lamar_nib.affine, lamar_nib.header)
@@ -103,8 +105,10 @@ def check_session_completed(output_dir):
     required_files = [
         "lamar_registered.nii.gz",
         "lamar_robust_registered.nii.gz",
-        "direct_ants_registered.nii.gz",
-        "direct_ants_default_registered.nii.gz"
+        "direct_ants_registered.nii.gz", 
+        "direct_ants_default_registered.nii.gz",
+        "direct_ants_medium_registered.nii.gz",
+        "fsl_registered.nii.gz"  # Add FSL output file
     ]
     
     for file in required_files:
@@ -155,26 +159,40 @@ def main():
         "lamar_robust_time",
         "ants_time",
         "ants_default_time",
+        "ants_medium_time",
+        "fsl_time",  # Add FSL time field
         "speedup_lamar_vs_ants",
         "speedup_robust_vs_ants",
         "speedup_lamar_vs_ants_default",
         "speedup_robust_vs_ants_default",
+        "speedup_lamar_vs_ants_medium",
+        "speedup_robust_vs_ants_medium",
+        "speedup_lamar_vs_fsl",  # Add FSL speedup field
+        "speedup_robust_vs_fsl",  # Add FSL speedup field
         "mi_lamar",
         "mi_lamar_robust",
         "mi_ants",
         "mi_ants_default",
+        "mi_ants_medium",
+        "mi_fsl",  # Add FSL metric field
         "antsneighborhoodcorrelation_lamar",
         "antsneighborhoodcorrelation_lamar_robust",
         "antsneighborhoodcorrelation_ants",
         "antsneighborhoodcorrelation_ants_default",
+        "antsneighborhoodcorrelation_ants_medium",
+        "antsneighborhoodcorrelation_fsl",  # Add FSL metric field
         "mind_lamar",
         "mind_lamar_robust",
         "mind_ants",
-        "mind_ants_default",
+        "mind_ants_default", 
+        "mind_ants_medium",
+        "mind_fsl",  # Add FSL metric field
         "ngf_lamar",
         "ngf_lamar_robust",
         "ngf_ants",
         "ngf_ants_default",
+        "ngf_ants_medium",
+        "ngf_fsl",  # Add FSL metric field
         "mind_descriptors_dir",
     ]
 
@@ -238,39 +256,15 @@ def main():
                     )
                     os.makedirs(subj_output_dir, exist_ok=True)
                     
-                    # Check if this session has already been processed
-                    is_completed = check_session_completed(subj_output_dir)
-                    print(f"    Checking if session {subject_folder}_{session_folder} is completed: {is_completed}. {subj_output_dir}")
-
-                    if is_completed and not args.force:
-                        print(f"    Session {subject_folder}_{session_folder} has already been processed. Skipping.")
-                        print(f"    (Use --force to reprocess completed sessions)")
-                        
-                        # Define paths to existing registration outputs
-                        lamar_output = os.path.join(subj_output_dir, "lamar_registered.nii.gz")
-                        lamar_robust_output = os.path.join(subj_output_dir, "lamar_robust_registered.nii.gz")
-                        ants_output = os.path.join(subj_output_dir, "ants_registered.nii.gz")
-                        ants_default_output = os.path.join(subj_output_dir, "ants_default_registered.nii.gz")
-                        
-                        # We can still regenerate metrics from existing outputs if needed
-                        print("    Re-calculating quality metrics from existing outputs...")
-                        quality_results = compare_registration_quality(
-                            lamar_output=lamar_output,
-                            ants_output=ants_output,
-                            fixed_img=t1w_file,
-                            lamar_robust_output=lamar_robust_output,
-                            ants_default_output=ants_default_output
-                        )
-                        
-                        # Read times from CSV if needed for display
-                        # (This is optional, depends on whether you want to show stats for skipped sessions)
-                        # For now we'll just continue to the next session
-                        continue
+                    # Define expected output files
+                    lamar_output = os.path.join(subj_output_dir, "lamar_registered.nii.gz")
+                    lamar_robust_output = os.path.join(subj_output_dir, "lamar_robust_registered.nii.gz")
+                    ants_output = os.path.join(subj_output_dir, "direct_ants_registered.nii.gz")
+                    ants_default_output = os.path.join(subj_output_dir, "direct_ants_default_registered.nii.gz")
+                    ants_medium_output = os.path.join(subj_output_dir, "direct_ants_medium_registered.nii.gz")
+                    fsl_output = os.path.join(subj_output_dir, "fsl_registered.nii.gz")  # Add FSL output path
                     
-                    # If not completed or force flag is set, run the registrations
-                    print(f"    Performing registration...")
-
-                    # Run LaMAR registration (DWI to T1w)
+                    # Run LaMAR registration (DWI to T1w) if needed
                     print("    Running LaMAR registration...")
                     lamar_time, lamar_output = run_lamar_registration(
                         moving_img=dwi_file,
@@ -279,9 +273,10 @@ def main():
                         registration_method=args.registration_method,
                         threads=args.threads,
                         verbose=not args.quiet,
+                        force=args.force,
                     )
                     
-                    # Run LaMAR robust registration (DWI to T1w)
+                    # Run LaMAR robust registration (DWI to T1w) if needed
                     print("    Running LaMAR registration with robust flag...")
                     lamar_robust_time, lamar_robust_output = run_lamar_registration_robust(
                         moving_img=dwi_file,
@@ -290,9 +285,10 @@ def main():
                         registration_method=args.registration_method,
                         threads=args.threads,
                         verbose=not args.quiet,
+                        force=args.force,
                     )
 
-                    # Run Direct ANTs registration with custom parameters
+                    # Run Direct ANTs registration with custom parameters if needed
                     print("    Running ANTs registration with custom parameters...")
                     ants_time, ants_output = run_direct_ants_registration(
                         moving_img=dwi_file,
@@ -301,9 +297,10 @@ def main():
                         registration_method=args.registration_method,
                         threads=args.threads,
                         verbose=not args.quiet,
+                        force=args.force,
                     )
                     
-                    # Run Direct ANTs registration with default parameters
+                    # Run Direct ANTs registration with default parameters if needed
                     print("    Running ANTs registration with default parameters...")
                     ants_default_time, ants_default_output = run_direct_ants_registration_default(
                         moving_img=dwi_file,
@@ -312,23 +309,53 @@ def main():
                         registration_method=args.registration_method,
                         threads=args.threads,
                         verbose=not args.quiet,
+                        force=args.force,
+                    )
+                    
+                    # Run Direct ANTs registration with medium iterations (40,20,10) if needed
+                    print("    Running ANTs registration with medium iterations (40,20,10)...")
+                    ants_medium_time, ants_medium_output = run_direct_ants_registration_medium_iters(
+                        moving_img=dwi_file,
+                        fixed_img=t1w_file,
+                        output_dir=subj_output_dir,
+                        registration_method=args.registration_method,
+                        threads=args.threads,
+                        verbose=not args.quiet,
+                        force=args.force,
                     )
 
-                    # Compare registration quality for all four methods
+                    # Run FSL registration
+                    print("    Running FSL registration with BBR...")
+                    fsl_time, fsl_output = run_fsl_registration(
+                        moving_img=dwi_file,
+                        fixed_img=t1w_file,
+                        output_dir=subj_output_dir,
+                        threads=args.threads,
+                        verbose=not args.quiet,
+                        force=args.force,
+                    )
+
+                    # Compare registration quality for all methods
                     print("    Comparing registration quality...")
                     quality_results = compare_registration_quality(
                         lamar_output=lamar_output,
                         ants_output=ants_output,
                         fixed_img=t1w_file,
                         lamar_robust_output=lamar_robust_output,
-                        ants_default_output=ants_default_output
+                        ants_default_output=ants_default_output,
+                        ants_medium_output=ants_medium_output,
+                        fsl_output=fsl_output  # Add FSL output
                     )
 
-                    # Calculate speedups
+                    # Calculate speedups including FSL
                     speedup_lamar_vs_ants = ants_time / lamar_time if lamar_time > 0 else 0
                     speedup_robust_vs_ants = ants_time / lamar_robust_time if lamar_robust_time > 0 else 0
                     speedup_lamar_vs_ants_default = ants_default_time / lamar_time if lamar_time > 0 else 0
                     speedup_robust_vs_ants_default = ants_default_time / lamar_robust_time if lamar_robust_time > 0 else 0
+                    speedup_lamar_vs_ants_medium = ants_medium_time / lamar_time if lamar_time > 0 else 0
+                    speedup_robust_vs_ants_medium = ants_medium_time / lamar_robust_time if lamar_robust_time > 0 else 0
+                    speedup_lamar_vs_fsl = fsl_time / lamar_time if lamar_time > 0 else 0
+                    speedup_robust_vs_fsl = fsl_time / lamar_robust_time if lamar_robust_time > 0 else 0
 
                     # Get metrics
                     mi = quality_results.get("mi", {})
@@ -336,7 +363,7 @@ def main():
                     mind = quality_results.get("mind", {})
                     ngf = quality_results.get("ngf", {})
 
-                    # Create row data with all four methods
+                    # Create row data with all methods including FSL
                     row_data = {
                         "subject_id": subject_folder,
                         "session_id": session_folder,
@@ -344,26 +371,40 @@ def main():
                         "lamar_robust_time": f"{lamar_robust_time:.2f}",
                         "ants_time": f"{ants_time:.2f}",
                         "ants_default_time": f"{ants_default_time:.2f}",
+                        "ants_medium_time": f"{ants_medium_time:.2f}",
+                        "fsl_time": f"{fsl_time:.2f}",
                         "speedup_lamar_vs_ants": f"{speedup_lamar_vs_ants:.2f}",
                         "speedup_robust_vs_ants": f"{speedup_robust_vs_ants:.2f}",
                         "speedup_lamar_vs_ants_default": f"{speedup_lamar_vs_ants_default:.2f}",
                         "speedup_robust_vs_ants_default": f"{speedup_robust_vs_ants_default:.2f}",
+                        "speedup_lamar_vs_ants_medium": f"{speedup_lamar_vs_ants_medium:.2f}",
+                        "speedup_robust_vs_ants_medium": f"{speedup_robust_vs_ants_medium:.2f}",
+                        "speedup_lamar_vs_fsl": f"{speedup_lamar_vs_fsl:.2f}",
+                        "speedup_robust_vs_fsl": f"{speedup_robust_vs_fsl:.2f}",
                         "mi_lamar": f"{mi.get('lamar', 'N/A')}" if mi else "N/A",
                         "mi_lamar_robust": f"{mi.get('lamar_robust', 'N/A')}" if mi else "N/A",
                         "mi_ants": f"{mi.get('ants', 'N/A')}" if mi else "N/A",
                         "mi_ants_default": f"{mi.get('ants_default', 'N/A')}" if mi else "N/A",
+                        "mi_ants_medium": f"{mi.get('ants_medium', 'N/A')}" if mi else "N/A",
+                        "mi_fsl": f"{mi.get('fsl', 'N/A')}" if mi else "N/A",
                         "antsneighborhoodcorrelation_lamar": f"{antsneighborhoodcorrelation.get('lamar', 'N/A')}" if antsneighborhoodcorrelation else "N/A",
                         "antsneighborhoodcorrelation_lamar_robust": f"{antsneighborhoodcorrelation.get('lamar_robust', 'N/A')}" if antsneighborhoodcorrelation else "N/A",
                         "antsneighborhoodcorrelation_ants": f"{antsneighborhoodcorrelation.get('ants', 'N/A')}" if antsneighborhoodcorrelation else "N/A",
                         "antsneighborhoodcorrelation_ants_default": f"{antsneighborhoodcorrelation.get('ants_default', 'N/A')}" if antsneighborhoodcorrelation else "N/A",
+                        "antsneighborhoodcorrelation_ants_medium": f"{antsneighborhoodcorrelation.get('ants_medium', 'N/A')}" if antsneighborhoodcorrelation else "N/A",
+                        "antsneighborhoodcorrelation_fsl": f"{antsneighborhoodcorrelation.get('fsl', 'N/A')}" if antsneighborhoodcorrelation else "N/A",
                         "mind_lamar": f"{mind.get('lamar', 'N/A')}" if mind else "N/A",
                         "mind_lamar_robust": f"{mind.get('lamar_robust', 'N/A')}" if mind else "N/A",
                         "mind_ants": f"{mind.get('ants', 'N/A')}" if mind else "N/A",
                         "mind_ants_default": f"{mind.get('ants_default', 'N/A')}" if mind else "N/A",
+                        "mind_ants_medium": f"{mind.get('ants_medium', 'N/A')}" if mind else "N/A",
+                        "mind_fsl": f"{mind.get('fsl', 'N/A')}" if mind else "N/A",
                         "ngf_lamar": f"{ngf.get('lamar', 'N/A')}" if ngf else "N/A",
                         "ngf_lamar_robust": f"{ngf.get('lamar_robust', 'N/A')}" if ngf else "N/A",
                         "ngf_ants": f"{ngf.get('ants', 'N/A')}" if ngf else "N/A",
                         "ngf_ants_default": f"{ngf.get('ants_default', 'N/A')}" if ngf else "N/A",
+                        "ngf_ants_medium": f"{ngf.get('ants_medium', 'N/A')}" if ngf else "N/A",
+                        "ngf_fsl": f"{ngf.get('fsl', 'N/A')}" if ngf else "N/A",
                     }
 
                     # Extract and save MIND descriptors if requested
@@ -382,17 +423,19 @@ def main():
                         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                         writer.writerow(row_data)
 
-                    # Print results for all four methods
+                    # Update print statements
                     print(f"    Quality metrics:")
-                    print(f"      MI (LaMAR: {mi.get('lamar', 'N/A')}, LaMAR robust: {mi.get('lamar_robust', 'N/A')}, ANTs: {mi.get('ants', 'N/A')}, ANTs default: {mi.get('ants_default', 'N/A')})")
-                    print(f"      antsneighborhoodcorrelation (LaMAR: {antsneighborhoodcorrelation.get('lamar', 'N/A')}, LaMAR robust: {antsneighborhoodcorrelation.get('lamar_robust', 'N/A')}, ANTs: {antsneighborhoodcorrelation.get('ants', 'N/A')}, ANTs default: {antsneighborhoodcorrelation.get('ants_default', 'N/A')})")
-                    print(f"      MIND (LaMAR: {mind.get('lamar', 'N/A')}, LaMAR robust: {mind.get('lamar_robust', 'N/A')}, ANTs: {mind.get('ants', 'N/A')}, ANTs default: {mind.get('ants_default', 'N/A')})")
-                    print(f"      NGF (LaMAR: {ngf.get('lamar', 'N/A')}, LaMAR robust: {ngf.get('lamar_robust', 'N/A')}, ANTs: {ngf.get('ants', 'N/A')}, ANTs default: {ngf.get('ants_default', 'N/A')})")
+                    print(f"      MI (LaMAR: {mi.get('lamar', 'N/A')}, LaMAR robust: {mi.get('lamar_robust', 'N/A')}, ANTs: {mi.get('ants', 'N/A')}, ANTs default: {mi.get('ants_default', 'N/A')}, ANTs medium: {mi.get('ants_medium', 'N/A')}, FSL: {mi.get('fsl', 'N/A')})")
+                    print(f"      antsneighborhoodcorrelation (LaMAR: {antsneighborhoodcorrelation.get('lamar', 'N/A')}, LaMAR robust: {antsneighborhoodcorrelation.get('lamar_robust', 'N/A')}, ANTs: {antsneighborhoodcorrelation.get('ants', 'N/A')}, ANTs default: {antsneighborhoodcorrelation.get('ants_default', 'N/A')}, ANTs medium: {antsneighborhoodcorrelation.get('ants_medium', 'N/A')}, FSL: {antsneighborhoodcorrelation.get('fsl', 'N/A')})")
+                    print(f"      MIND (LaMAR: {mind.get('lamar', 'N/A')}, LaMAR robust: {mind.get('lamar_robust', 'N/A')}, ANTs: {mind.get('ants', 'N/A')}, ANTs default: {mind.get('ants_default', 'N/A')}, ANTs medium: {mind.get('ants_medium', 'N/A')}, FSL: {mind.get('fsl', 'N/A')})")
+                    print(f"      NGF (LaMAR: {ngf.get('lamar', 'N/A')}, LaMAR robust: {ngf.get('lamar_robust', 'N/A')}, ANTs: {ngf.get('ants', 'N/A')}, ANTs default: {ngf.get('ants_default', 'N/A')}, ANTs medium: {ngf.get('ants_medium', 'N/A')}, FSL: {ngf.get('fsl', 'N/A')})")
                     
                     print(f"    Completed registration for {subject_folder}_{session_folder}")
-                    print(f"    Times: LaMAR: {lamar_time:.2f}s, LaMAR robust: {lamar_robust_time:.2f}s, ANTs: {ants_time:.2f}s, ANTs default: {ants_default_time:.2f}s")
+                    print(f"    Times: LaMAR: {lamar_time:.2f}s, LaMAR robust: {lamar_robust_time:.2f}s, ANTs: {ants_time:.2f}s, ANTs default: {ants_default_time:.2f}s, ANTs medium: {ants_medium_time:.2f}s, FSL: {fsl_time:.2f}s")
                     print(f"    Speedups vs ANTs: LaMAR: {speedup_lamar_vs_ants:.2f}x, LaMAR robust: {speedup_robust_vs_ants:.2f}x")
                     print(f"    Speedups vs ANTs default: LaMAR: {speedup_lamar_vs_ants_default:.2f}x, LaMAR robust: {speedup_robust_vs_ants_default:.2f}x")
+                    print(f"    Speedups vs ANTs medium: LaMAR: {speedup_lamar_vs_ants_medium:.2f}x, LaMAR robust: {speedup_robust_vs_ants_medium:.2f}x")
+                    print(f"    Speedups vs FSL: LaMAR: {speedup_lamar_vs_fsl:.2f}x, LaMAR robust: {speedup_robust_vs_fsl:.2f}x")
                     print(f"    Results appended to {results_csv}")
                 else:
                     print(f"    Missing T1w or DWI scan, skipping")
