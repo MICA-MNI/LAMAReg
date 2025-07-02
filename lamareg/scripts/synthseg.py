@@ -48,8 +48,12 @@ Python Usage:
 # python imports
 import os
 import sys
+import multiprocessing
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from colorama import init, Fore, Style
+
+# Get number of available CPU cores
+DEFAULT_THREADS = multiprocessing.cpu_count()
 
 init()
 
@@ -302,8 +306,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--threads",
         type=int,
-        default=1,
-        help="(optional) Number of cores to be used. Default is 1.",
+        default=DEFAULT_THREADS,
+        help=f"(optional) Number of cores to be used. Default is {DEFAULT_THREADS} (all available).",
     )
     parser.add_argument(
         "--cpu",
