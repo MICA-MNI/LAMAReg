@@ -75,11 +75,12 @@ def print_cli_help():
       {YELLOW}--synthseg-threads{RESET} N      : SynthSeg threads (default: 1)
       {YELLOW}--ants-threads{RESET} N          : ANTs threads (default: 1)
       {YELLOW}--qc-csv{RESET} PATH             : Path for QC Dice score CSV file
-      {YELLOW}--inverse-warpfield{RESET} P     : Path for inverse warp field
+      {YELLOW}--inverse-warpfield{RESET} PATH  : Path for inverse warp field
       {YELLOW}--inverse-affine{RESET} PATH     : Path for inverse affine transformation
       {YELLOW}--skip-fixed-parc{RESET}         : Toggle skipping fixed image parcellation
       {YELLOW}--skip-moving-parc{RESET}        : Toggle skipping moving image parcellation
       {YELLOW}--skip-qc{RESET}                 : Toggle skipping QC (default: False)
+      {YELLOW}--robust{RESET}                  : Use two-stage robust registration (default: False)
       
 
     {CYAN}{BOLD}────────────────── GENERATE WARPFIELD ────────────────────{RESET}
@@ -108,6 +109,12 @@ def print_cli_help():
       {YELLOW}--inverse-warpfield{RESET} T1w_to_dwi_warp.nii.gz {YELLOW}--inverse-affine{RESET} T1w_to_dwi_affine.mat \\
       {YELLOW}--synthseg-threads{RESET} 4 {YELLOW}--ants-threads{RESET} 8
 
+    {BLUE}# Register with robust two-stage approach for challenging cases:{RESET}
+    lamar {GREEN}register{RESET} {YELLOW}--moving{RESET} subject_flair.nii.gz {YELLOW}--fixed{RESET} subject_t1w.nii.gz \\
+      {YELLOW}--output{RESET} registered_flair.nii.gz {YELLOW}--moving-parc{RESET} flair_parcellation.nii.gz \\
+      {YELLOW}--fixed-parc{RESET} t1w_parcellation.nii.gz {YELLOW}--affine{RESET} flair_to_t1w_affine.mat \\
+      {YELLOW}--warpfield{RESET} flair_to_t1w_warp.nii.gz {YELLOW}--robust{RESET}
+
     {BLUE}# Generate parcellations separately:{RESET}
     lamar {GREEN}synthseg{RESET} {YELLOW}--i{RESET} subject_t1w.nii.gz {YELLOW}--o{RESET} t1w_parcellation.nii.gz {YELLOW}--parc{RESET}
     lamar {GREEN}synthseg{RESET} {YELLOW}--i{RESET} subject_flair.nii.gz {YELLOW}--o{RESET} flair_parcellation.nii.gz {YELLOW}--parc{RESET}
@@ -115,7 +122,8 @@ def print_cli_help():
     {BLUE}# Register using existing parcellations:{RESET}
     lamar {GREEN}register{RESET} {YELLOW}--moving{RESET} subject_flair.nii.gz {YELLOW}--fixed{RESET} subject_t1w.nii.gz \\
       {YELLOW}--output{RESET} registered_flair.nii.gz {YELLOW}--moving-parc{RESET} flair_parcellation.nii.gz \\
-      {YELLOW}--fixed-parc{RESET} t1w_parcellation.nii.gz [other arguments...]
+      {YELLOW}--fixed-parc{RESET} t1w_parcellation.nii.gz {YELLOW}--skip-fixed-parc{RESET} {YELLOW}--skip-moving-parc{RESET} \\
+      {YELLOW}--affine{RESET} flair_to_t1w_affine.mat {YELLOW}--warpfield{RESET} flair_to_t1w_warp.nii.gz
 
     {CYAN}{BOLD}────────────────────────── NOTES ───────────────────────{RESET}
     {MAGENTA}•{RESET} LAMAR works with any MRI modality combination
@@ -123,6 +131,9 @@ def print_cli_help():
     {MAGENTA}•{RESET} All output files need explicit paths to ensure deterministic behavior
     {MAGENTA}•{RESET} The transforms can be reused with the apply-warpfield command
     {MAGENTA}•{RESET} Use dice-compare to evaluate registration quality
+    {MAGENTA}•{RESET} The robust mode performs a two-stage registration for improved accuracy:
+      1. Register parcellations (contrast-agnostic)
+      2. Fine-tune with a second direct registration using the first result as initialization
     """
     print(help_text)
 
@@ -217,6 +228,11 @@ def main():
     register_parser.add_argument(
         "--skip-qc", action="store_true", help="whether to skip QC (default: False)"
     )
+    register_parser.add_argument(
+        "--robust",
+        action="store_true",
+        help="Whether to use robust registration (default: False)",
+    )
 
     # WORKFLOW 2: Generate warpfield only
     warpfield_parser = subparsers.add_parser(
@@ -285,6 +301,11 @@ def main():
     )
     warpfield_parser.add_argument(
         "--skip-qc", action="store_true", help="whether to skip QC (default: False)"
+    )
+    warpfield_parser.add_argument(
+        "--robust",
+        action="store_true",
+        help="Whether to use robust registration (default: False)",
     )
 
     # WORKFLOW 3: Apply existing warpfield
@@ -423,6 +444,7 @@ def main():
                 skip_moving_parc=args.skip_moving_parc,
                 skip_qc=args.skip_qc,
                 qc_csv=args.qc_csv,
+                robust=args.robust,
             )
 
             # Clean up temporary files after successful completion
@@ -493,6 +515,7 @@ def main():
                 skip_moving_parc=args.skip_moving_parc,
                 skip_qc=args.skip_qc,
                 qc_csv=args.qc_csv,
+                robust=args.robust,
             )
 
             # Clean up temporary files after successful completion
