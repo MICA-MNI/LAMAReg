@@ -18,6 +18,9 @@ import os
 import argparse
 import subprocess
 import sys
+import multiprocessing
+
+DEFAULT_THREADS = multiprocessing.cpu_count()
 
 
 def lamareg(
@@ -26,16 +29,14 @@ def lamareg(
     output_image=None,
     input_parc=None,
     reference_parc=None,
-    output_parc=None,
-    generate_warpfield=False,
-    apply_warpfield=False,
-    registration_method="SyNRA",
-    affine_file=None,
+    registered_parc=None,
     warp_file=None,
+    affine_file=None,
     inverse_warp_file=None,
     inverse_affine_file=None,
-    synthseg_threads=1,
-    ants_threads=1,
+    registration_method="SyNRA",
+    synthseg_threads=DEFAULT_THREADS,  # Change default from 1 to all cores
+    ants_threads=DEFAULT_THREADS,      # Change default from 1 to all cores
     qc_csv=None,
     skip_fixed_parc=False,
     skip_moving_parc=False,
@@ -248,9 +249,9 @@ def lamareg(
             cmd = [
                 "lamar",
                 "coregister",
-                "--fixed-file",
+                "--fixed",
                 reference_parc,
-                "--moving-file",
+                "--moving",
                 input_parc,
                 "--registration-method",
                 registration_method,
@@ -267,10 +268,10 @@ def lamareg(
                 cmd.extend(["--warp-file", warp_file])
 
             if inverse_warp_file:
-                cmd.extend(["--rev-warp-file", inverse_warp_file])
+                cmd.extend(["--inverse-warp-file", inverse_warp_file])  # Standardized name
 
             if inverse_affine_file:
-                cmd.extend(["--rev-affine-file", inverse_affine_file])
+                cmd.extend(["--inverse-affine-file", inverse_affine_file])  # Standardized name
 
             subprocess.run(cmd, check=True, env=env)
             if robust:
@@ -370,13 +371,13 @@ def lamareg(
                     "apply-warp",  # Use hyphen instead of underscore
                     "--moving",
                     input_image,
-                    "--reference",
+                    "--fixed",  # Changed from --reference to --fixed
                     reference_image,
                     "--output",
                     output_image,
                 ]
 
-                # Only include transform flags if files were provided
+                # Only include transform file flags if files were provided
                 if affine_file:
                     apply_cmd.extend(["--affine", affine_file])
 

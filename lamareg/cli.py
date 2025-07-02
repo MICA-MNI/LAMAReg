@@ -12,8 +12,11 @@ import shutil
 from lamareg.scripts.lamar import lamareg
 from lamareg.scripts import synthseg, coregister, apply_warp
 from colorama import init, Fore, Style
+import multiprocessing
 
 init()
+
+DEFAULT_THREADS = multiprocessing.cpu_count()
 
 
 def print_cli_help():
@@ -583,7 +586,7 @@ def main():
         if hasattr(args, "threads") and args.threads:
             synthseg_args["threads"] = str(args.threads)
         else:
-            synthseg_args["threads"] = "1"
+            synthseg_args["threads"] = str(DEFAULT_THREADS)  # Use all available cores
 
         try:
             synthseg.main(synthseg_args)
