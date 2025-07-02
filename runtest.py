@@ -448,19 +448,42 @@ def compare_registration_quality(lamar_output, ants_output, fixed_img, lamar_rob
         fsl_output: Path to FSL registered image (optional)
 
     Returns:
-        Dictionary with results for all metrics
+        Dictionary with results for all metrics or None if no registrations to compare
     """
-    # Load images
-    lamar_img_nib = nib.load(lamar_output)
-    ants_img_nib = nib.load(ants_output)
+    # First, check if any registration was actually performed
+    # We need at least one registration output to compare
+    if not os.path.exists(lamar_output) and not os.path.exists(ants_output) and \
+       (not lamar_robust_output or not os.path.exists(lamar_robust_output)) and \
+       (not ants_default_output or not os.path.exists(ants_default_output)) and \
+       (not ants_medium_output or not os.path.exists(ants_medium_output)) and \
+       (not fsl_output or not os.path.exists(fsl_output)):
+        print("No registration outputs available for quality assessment")
+        return None
+    
+    # We need at least two registered images to compare
+    valid_outputs = 0
+    for img_path in [lamar_output, ants_output, lamar_robust_output, 
+                     ants_default_output, ants_medium_output, fsl_output]:
+        if img_path and os.path.exists(img_path):
+            valid_outputs += 1
+    
+    if valid_outputs < 2:
+        print("Not enough registration outputs available for quality assessment")
+        return None
+        
+    # Continue with quality assessment as normal...
+    results = {}
+    
+    # Load images that exist
     fixed_img_nib = nib.load(fixed_img)
-
-    # Convert to numpy arrays
-    lamar_img_data = lamar_img_nib.get_fdata()
-    ants_img_data = ants_img_nib.get_fdata()
     fixed_img_data = fixed_img_nib.get_fdata()
-
-    # Load robust LAMAReg, ANTs variants and FSL if provided
+    fixed_tensor = torch.from_numpy(fixed_img_data).float().unsqueeze(0).unsqueeze(0)
+    
+    # Initialize data containers
+    lamar_img_data = None
+    lamar_tensor = None
+    ants_img_data = None
+    ants_tensor = None
     lamar_robust_data = None
     lamar_robust_tensor = None
     ants_default_data = None
@@ -470,41 +493,42 @@ def compare_registration_quality(lamar_output, ants_output, fixed_img, lamar_rob
     fsl_data = None
     fsl_tensor = None
     
-    if lamar_robust_output is not None:
+    # Load only available images
+    if os.path.exists(lamar_output):
+        lamar_img_nib = nib.load(lamar_output)
+        lamar_img_data = lamar_img_nib.get_fdata()
+        lamar_tensor = torch.from_numpy(lamar_img_data).float().unsqueeze(0).unsqueeze(0)
+    
+    if os.path.exists(ants_output):
+        ants_img_nib = nib.load(ants_output)
+        ants_img_data = ants_img_nib.get_fdata()
+        ants_tensor = torch.from_numpy(ants_img_data).float().unsqueeze(0).unsqueeze(0)
+    
+    if lamar_robust_output and os.path.exists(lamar_robust_output):
         lamar_robust_nib = nib.load(lamar_robust_output)
         lamar_robust_data = lamar_robust_nib.get_fdata()
         lamar_robust_tensor = torch.from_numpy(lamar_robust_data).float().unsqueeze(0).unsqueeze(0)
         
-    if ants_default_output is not None:
+    if ants_default_output and os.path.exists(ants_default_output):
         ants_default_nib = nib.load(ants_default_output)
         ants_default_data = ants_default_nib.get_fdata()
         ants_default_tensor = torch.from_numpy(ants_default_data).float().unsqueeze(0).unsqueeze(0)
         
-    if ants_medium_output is not None:
+    if ants_medium_output and os.path.exists(ants_medium_output):
         ants_medium_nib = nib.load(ants_medium_output)
         ants_medium_data = ants_medium_nib.get_fdata()
         ants_medium_tensor = torch.from_numpy(ants_medium_data).float().unsqueeze(0).unsqueeze(0)
         
-    if fsl_output is not None:
+    if fsl_output and os.path.exists(fsl_output):
         fsl_nib = nib.load(fsl_output)
         fsl_data = fsl_nib.get_fdata()
         fsl_tensor = torch.from_numpy(fsl_data).float().unsqueeze(0).unsqueeze(0)
-    
-    # Convert to PyTorch tensors
-    lamar_tensor = torch.from_numpy(lamar_img_data).float()
-    ants_tensor = torch.from_numpy(ants_img_data).float()
-    fixed_tensor = torch.from_numpy(fixed_img_data).float()
-
-    # Add batch and channel dimensions
-    lamar_tensor = lamar_tensor.unsqueeze(0).unsqueeze(0)
-    ants_tensor = ants_tensor.unsqueeze(0).unsqueeze(0)
-    fixed_tensor = fixed_tensor.unsqueeze(0).unsqueeze(0)
-
-    results = {}
 
     # Calculate Mutual Information using ANTsPy
     def mutual_information(img1, img2, bins=32):
         """Calculate mutual information between two images using ANTsPy."""
+        if img1 is None or img2 is None:
+            return None
         # Convert numpy arrays to ANTs images
         img1_ants = ants.from_numpy(img1.astype(np.float32))
         img2_ants = ants.from_numpy(img2.astype(np.float32))
@@ -515,6 +539,8 @@ def compare_registration_quality(lamar_output, ants_output, fixed_img, lamar_rob
     # Calculate ANTSNeighborhoodCorrelation using ANTsPy
     def ants_neighborhood_correlation(img1, img2):
         """Calculate ANTSNeighborhoodCorrelation between two images using ANTsPy."""
+        if img1 is None or img2 is None:
+            return None
         # Convert numpy arrays to ANTs images
         img1_ants = ants.from_numpy(img1.astype(np.float32))
         img2_ants = ants.from_numpy(img2.astype(np.float32))
@@ -525,16 +551,18 @@ def compare_registration_quality(lamar_output, ants_output, fixed_img, lamar_rob
         return similarity
 
     # Calculate and store MI
-    results["mi"] = {
-        "lamar": mutual_information(lamar_img_data, fixed_img_data),
-        "ants": mutual_information(ants_img_data, fixed_img_data),
-    }
+    results["mi"] = {}
+    if lamar_img_data is not None:
+        results["mi"]["lamar"] = mutual_information(lamar_img_data, fixed_img_data)
+    if ants_img_data is not None:
+        results["mi"]["ants"] = mutual_information(ants_img_data, fixed_img_data)
     
     # Calculate and store ANTSNeighborhoodCorrelation
-    results["antsneighborhoodcorrelation"] = {
-        "lamar": ants_neighborhood_correlation(lamar_img_data, fixed_img_data),
-        "ants": ants_neighborhood_correlation(ants_img_data, fixed_img_data),
-    }
+    results["antsneighborhoodcorrelation"] = {}
+    if lamar_img_data is not None:
+        results["antsneighborhoodcorrelation"]["lamar"] = ants_neighborhood_correlation(lamar_img_data, fixed_img_data)
+    if ants_img_data is not None:
+        results["antsneighborhoodcorrelation"]["ants"] = ants_neighborhood_correlation(ants_img_data, fixed_img_data)
     
     # Add robust, default, medium ANTs and FSL results if available
     if lamar_robust_data is not None:
@@ -558,26 +586,21 @@ def compare_registration_quality(lamar_output, ants_output, fixed_img, lamar_rob
         from torch_mind import MINDLoss3D
 
         mind_loss = MINDLoss3D()
+        results["mind"] = {}
 
         with torch.no_grad():
-            lamar_mind = mind_loss(lamar_tensor, fixed_tensor).item()
-            ants_mind = mind_loss(ants_tensor, fixed_tensor).item()
-            
-            mind_results = {"lamar": lamar_mind, "ants": ants_mind}
-            
+            if lamar_tensor is not None:
+                results["mind"]["lamar"] = mind_loss(lamar_tensor, fixed_tensor).item()
+            if ants_tensor is not None:
+                results["mind"]["ants"] = mind_loss(ants_tensor, fixed_tensor).item()
             if lamar_robust_tensor is not None:
-                mind_results["lamar_robust"] = mind_loss(lamar_robust_tensor, fixed_tensor).item()
-            
+                results["mind"]["lamar_robust"] = mind_loss(lamar_robust_tensor, fixed_tensor).item()
             if ants_default_tensor is not None:
-                mind_results["ants_default"] = mind_loss(ants_default_tensor, fixed_tensor).item()
-                
+                results["mind"]["ants_default"] = mind_loss(ants_default_tensor, fixed_tensor).item()
             if ants_medium_tensor is not None:
-                mind_results["ants_medium"] = mind_loss(ants_medium_tensor, fixed_tensor).item()
-                
+                results["mind"]["ants_medium"] = mind_loss(ants_medium_tensor, fixed_tensor).item()
             if fsl_tensor is not None:
-                mind_results["fsl"] = mind_loss(fsl_tensor, fixed_tensor).item()
-            
-            results["mind"] = mind_results
+                results["mind"]["fsl"] = mind_loss(fsl_tensor, fixed_tensor).item()
     except Exception as e:
         print(f"Error calculating MIND: {e}")
         results["mind"] = None
@@ -586,7 +609,7 @@ def compare_registration_quality(lamar_output, ants_output, fixed_img, lamar_rob
     try:
         from normalized_gradient_field import NormalizedGradientField3d
 
-        pixel_spacing = lamar_img_nib.header.get_zooms()[:3]
+        pixel_spacing = fixed_img_nib.header.get_zooms()[:3]
 
         ngf = NormalizedGradientField3d(
             grad_method="default",
@@ -594,25 +617,21 @@ def compare_registration_quality(lamar_output, ants_output, fixed_img, lamar_rob
             reduction="mean",
         )
 
+        results["ngf"] = {}
+        
         with torch.no_grad():
-            lamar_ngf = ngf(lamar_tensor, fixed_tensor).item()
-            ants_ngf = ngf(ants_tensor, fixed_tensor).item()
-            
-            ngf_results = {"lamar": lamar_ngf, "ants": ants_ngf}
-            
+            if lamar_tensor is not None:
+                results["ngf"]["lamar"] = ngf(lamar_tensor, fixed_tensor).item()
+            if ants_tensor is not None:
+                results["ngf"]["ants"] = ngf(ants_tensor, fixed_tensor).item()
             if lamar_robust_tensor is not None:
-                ngf_results["lamar_robust"] = ngf(lamar_robust_tensor, fixed_tensor).item()
-                
+                results["ngf"]["lamar_robust"] = ngf(lamar_robust_tensor, fixed_tensor).item()
             if ants_default_tensor is not None:
-                ngf_results["ants_default"] = ngf(ants_default_tensor, fixed_tensor).item()
-                
+                results["ngf"]["ants_default"] = ngf(ants_default_tensor, fixed_tensor).item()
             if ants_medium_tensor is not None:
-                ngf_results["ants_medium"] = ngf(ants_medium_tensor, fixed_tensor).item()
-                
+                results["ngf"]["ants_medium"] = ngf(ants_medium_tensor, fixed_tensor).item()
             if fsl_tensor is not None:
-                ngf_results["fsl"] = ngf(fsl_tensor, fixed_tensor).item()
-            
-            results["ngf"] = ngf_results
+                results["ngf"]["fsl"] = ngf(fsl_tensor, fixed_tensor).item()
     except Exception as e:
         print(f"Error calculating NGF: {e}")
         results["ngf"] = None

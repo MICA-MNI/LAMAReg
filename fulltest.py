@@ -4,6 +4,7 @@ import argparse
 import numpy as np
 import nibabel as nib
 import torch
+import gc
 from runtest import (
     run_lamar_registration,
     run_direct_ants_registration,
@@ -20,77 +21,124 @@ def save_mind_descriptors(moving_img, fixed_img, lamar_output, ants_output, outp
     """Extract and save MIND descriptors as multi-channel NIfTI images."""
     print("    Generating MIND descriptor visualizations...")
 
-    # Load images using nibabel
-    fixed_nib = nib.load(fixed_img)
-    fixed_data = fixed_nib.get_fdata()
-    lamar_nib = nib.load(lamar_output)
-    lamar_data = lamar_nib.get_fdata()
-    ants_nib = nib.load(ants_output)
-    ants_data = ants_nib.get_fdata()
-    
-    # Load optional images
-    lamar_robust_data = None
-    ants_default_data = None
-    if lamar_robust_output:
-        lamar_robust_nib = nib.load(lamar_robust_output)
-        lamar_robust_data = lamar_robust_nib.get_fdata()
-    if ants_default_output:
-        ants_default_nib = nib.load(ants_default_output)
-        ants_default_data = ants_default_nib.get_fdata()
-
-    # Convert to tensors with batch dimension for MIND
-    fixed_tensor = torch.from_numpy(fixed_data).float().unsqueeze(0).unsqueeze(0)
-    lamar_tensor = torch.from_numpy(lamar_data).float().unsqueeze(0).unsqueeze(0)
-    ants_tensor = torch.from_numpy(ants_data).float().unsqueeze(0).unsqueeze(0)
-    
-    if lamar_robust_data is not None:
-        lamar_robust_tensor = torch.from_numpy(lamar_robust_data).float().unsqueeze(0).unsqueeze(0)
-    if ants_default_data is not None:
-        ants_default_tensor = torch.from_numpy(ants_default_data).float().unsqueeze(0).unsqueeze(0)
-
-    # Create MIND descriptor
-    mind_descriptor = MIND3D(patch_size=3, sigma=0.5)
-
-    # Calculate MIND descriptors
-    with torch.no_grad():
-        mind_fixed = mind_descriptor(fixed_tensor)
-        mind_lamar = mind_descriptor(lamar_tensor)
-        mind_ants = mind_descriptor(ants_tensor)
-        if lamar_robust_data is not None:
-            mind_lamar_robust = mind_descriptor(lamar_robust_tensor)
-        if ants_default_data is not None:
-            mind_ants_default = mind_descriptor(ants_default_tensor)
-
-    # Create output directory for MIND visualizations
-    mind_dir = os.path.join(output_dir, "mind_descriptors")
-    os.makedirs(mind_dir, exist_ok=True)
-
-    # Convert from PyTorch tensors to NumPy arrays and save
-    fixed_mind_data = np.transpose(mind_fixed[0].numpy(), (1, 2, 3, 0))
-    fixed_mind_nii = nib.Nifti1Image(fixed_mind_data, fixed_nib.affine, fixed_nib.header)
-    nib.save(fixed_mind_ii, os.path.join(mind_dir, "fixed_mind.nii.gz"))
-
-    lamar_mind_data = np.transpose(mind_lamar[0].numpy(), (1, 2, 3, 0))
-    lamar_mind_nii = nib.Nifti1Image(lamar_mind_data, lamar_nib.affine, lamar_nib.header)
-    nib.save(lamar_mind_nii, os.path.join(mind_dir, "lamar_mind.nii.gz"))
-
-    ants_mind_data = np.transpose(mind_ants[0].numpy(), (1, 2, 3, 0))
-    ants_mind_nii = nib.Nifti1Image(ants_mind_data, ants_nib.affine, ants_nib.header)
-    nib.save(ants_mind_nii, os.path.join(mind_dir, "ants_mind.nii.gz"))
-    
-    # Save optional mind descriptors
-    if lamar_robust_data is not None:
-        lamar_robust_mind_data = np.transpose(mind_lamar_robust[0].numpy(), (1, 2, 3, 0))
-        lamar_robust_mind_nii = nib.Nifti1Image(lamar_robust_mind_data, lamar_robust_nib.affine, lamar_robust_nib.header)
-        nib.save(lamar_robust_mind_nii, os.path.join(mind_dir, "lamar_robust_mind.nii.gz"))
+    try:
+        # Load images using nibabel
+        fixed_nib = nib.load(fixed_img)
+        fixed_data = fixed_nib.get_fdata()
+        lamar_nib = nib.load(lamar_output)
+        lamar_data = lamar_nib.get_fdata()
+        ants_nib = nib.load(ants_output)
+        ants_data = ants_nib.get_fdata()
         
-    if ants_default_data is not None:
-        ants_default_mind_data = np.transpose(mind_ants_default[0].numpy(), (1, 2, 3, 0))
-        ants_default_mind_nii = nib.Nifti1Image(ants_default_mind_data, ants_default_nib.affine, ants_default_nib.header)
-        nib.save(ants_default_mind_nii, os.path.join(mind_dir, "ants_default_mind.nii.gz"))
+        # Load optional images
+        lamar_robust_data = None
+        ants_default_data = None
+        lamar_robust_nib = None
+        ants_default_nib = None
+        
+        if lamar_robust_output:
+            lamar_robust_nib = nib.load(lamar_robust_output)
+            lamar_robust_data = lamar_robust_nib.get_fdata()
+        if ants_default_output:
+            ants_default_nib = nib.load(ants_default_output)
+            ants_default_data = ants_default_nib.get_fdata()
 
-    print(f"    MIND descriptors saved in {mind_dir}")
-    return mind_dir
+        # Convert to tensors with batch dimension for MIND
+        fixed_tensor = torch.from_numpy(fixed_data).float().unsqueeze(0).unsqueeze(0)
+        lamar_tensor = torch.from_numpy(lamar_data).float().unsqueeze(0).unsqueeze(0)
+        ants_tensor = torch.from_numpy(ants_data).float().unsqueeze(0).unsqueeze(0)
+        
+        lamar_robust_tensor = None
+        ants_default_tensor = None
+        
+        if lamar_robust_data is not None:
+            lamar_robust_tensor = torch.from_numpy(lamar_robust_data).float().unsqueeze(0).unsqueeze(0)
+        if ants_default_data is not None:
+            ants_default_tensor = torch.from_numpy(ants_default_data).float().unsqueeze(0).unsqueeze(0)
+
+        # Create MIND descriptor
+        mind_descriptor = MIND3D(patch_size=3, sigma=0.5)
+
+        # Calculate MIND descriptors
+        with torch.no_grad():
+            mind_fixed = mind_descriptor(fixed_tensor)
+            mind_lamar = mind_descriptor(lamar_tensor)
+            mind_ants = mind_descriptor(ants_tensor)
+            
+            mind_lamar_robust = None
+            mind_ants_default = None
+            
+            if lamar_robust_tensor is not None:
+                mind_lamar_robust = mind_descriptor(lamar_robust_tensor)
+            if ants_default_tensor is not None:
+                mind_ants_default = mind_descriptor(ants_default_tensor)
+
+        # Create output directory for MIND visualizations
+        mind_dir = os.path.join(output_dir, "mind_descriptors")
+        os.makedirs(mind_dir, exist_ok=True)
+
+        # Convert from PyTorch tensors to NumPy arrays and save
+        fixed_mind_data = np.transpose(mind_fixed[0].numpy(), (1, 2, 3, 0))
+        fixed_mind_nii = nib.Nifti1Image(fixed_mind_data, fixed_nib.affine, fixed_nib.header)
+        nib.save(fixed_mind_nii, os.path.join(mind_dir, "fixed_mind.nii.gz"))
+        
+        # Free memory as we go
+        del fixed_mind_data, mind_fixed, fixed_tensor
+        gc.collect()
+
+        lamar_mind_data = np.transpose(mind_lamar[0].numpy(), (1, 2, 3, 0))
+        lamar_mind_nii = nib.Nifti1Image(lamar_mind_data, lamar_nib.affine, lamar_nib.header)
+        nib.save(lamar_mind_nii, os.path.join(mind_dir, "lamar_mind.nii.gz"))
+        
+        # Free memory
+        del lamar_mind_data, mind_lamar, lamar_tensor
+        gc.collect()
+
+        ants_mind_data = np.transpose(mind_ants[0].numpy(), (1, 2, 3, 0))
+        ants_mind_nii = nib.Nifti1Image(ants_mind_data, ants_nib.affine, ants_nib.header)
+        nib.save(ants_mind_nii, os.path.join(mind_dir, "ants_mind.nii.gz"))
+        
+        # Free memory
+        del ants_mind_data, mind_ants, ants_tensor
+        gc.collect()
+        
+        # Save optional mind descriptors
+        if mind_lamar_robust is not None:
+            lamar_robust_mind_data = np.transpose(mind_lamar_robust[0].numpy(), (1, 2, 3, 0))
+            lamar_robust_mind_nii = nib.Nifti1Image(lamar_robust_mind_data, lamar_robust_nib.affine, lamar_robust_nib.header)
+            nib.save(lamar_robust_mind_nii, os.path.join(mind_dir, "lamar_robust_mind.nii.gz"))
+            del lamar_robust_mind_data, mind_lamar_robust, lamar_robust_tensor
+            gc.collect()
+            
+        if mind_ants_default is not None:
+            ants_default_mind_data = np.transpose(mind_ants_default[0].numpy(), (1, 2, 3, 0))
+            ants_default_mind_nii = nib.Nifti1Image(ants_default_mind_data, ants_default_nib.affine, ants_default_nib.header)
+            nib.save(ants_default_mind_nii, os.path.join(mind_dir, "ants_default_mind.nii.gz"))
+            del ants_default_mind_data, mind_ants_default, ants_default_tensor
+            gc.collect()
+
+        print(f"    MIND descriptors saved in {mind_dir}")
+        
+        # Final cleanup
+        del fixed_data, fixed_nib
+        del lamar_data, lamar_nib
+        del ants_data, ants_nib
+        if lamar_robust_nib is not None:
+            del lamar_robust_data, lamar_robust_nib
+        if ants_default_nib is not None:
+            del ants_default_data, ants_default_nib
+        
+        # Clear CUDA cache if using GPU
+        torch.cuda.empty_cache() if torch.cuda.is_available() else None
+        
+        return mind_dir
+    
+    except Exception as e:
+        print(f"Error generating MIND descriptors: {e}")
+        # Ensure memory cleanup even if there's an error
+        gc.collect()
+        torch.cuda.empty_cache() if torch.cuda.is_available() else None
+        return None
 
 
 def normalize_for_vis(array):
@@ -203,10 +251,18 @@ def main():
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
 
+    # At the top level, add a counter to force GC every few subjects
+    subject_count = 0
+
     # Iterate through subjects
     for subject_folder in os.listdir(args.data_path):
         subject_dir = os.path.join(args.data_path, subject_folder)
         if not os.path.isdir(subject_dir) or not subject_folder.startswith("sub-"):
+            continue
+        
+        # Skip subjects that don't have "HC" in their name
+        if "HC" not in subject_folder:
+            print(f"Skipping non-HC subject: {subject_folder}")
             continue
 
         print(f"Processing subject: {subject_folder}")
@@ -335,33 +391,45 @@ def main():
                         force=args.force,
                     )
 
-                    # Compare registration quality for all methods
-                    print("    Comparing registration quality...")
-                    quality_results = compare_registration_quality(
-                        lamar_output=lamar_output,
-                        ants_output=ants_output,
-                        fixed_img=t1w_file,
-                        lamar_robust_output=lamar_robust_output,
-                        ants_default_output=ants_default_output,
-                        ants_medium_output=ants_medium_output,
-                        fsl_output=fsl_output  # Add FSL output
+                    # Check if any registration was actually performed
+                    registrations_performed = (
+                        lamar_time > 0 or
+                        lamar_robust_time > 0 or
+                        ants_time > 0 or
+                        ants_default_time > 0 or
+                        ants_medium_time > 0 or
+                        fsl_time > 0
                     )
+                    
+                    # Skip quality assessment if no registrations were performed
+                    if registrations_performed:
+                        # Compare registration quality for all methods
+                        print("    Comparing registration quality...")
+                        quality_results = compare_registration_quality(
+                            lamar_output=lamar_output,
+                            ants_output=ants_output,
+                            fixed_img=t1w_file,
+                            lamar_robust_output=lamar_robust_output,
+                            ants_default_output=ants_default_output,
+                            ants_medium_output=ants_medium_output,
+                            fsl_output=fsl_output
+                        )
+                    else:
+                        print("    No new registrations performed, skipping quality assessment")
+                        quality_results = None
 
-                    # Calculate speedups including FSL
-                    speedup_lamar_vs_ants = ants_time / lamar_time if lamar_time > 0 else 0
-                    speedup_robust_vs_ants = ants_time / lamar_robust_time if lamar_robust_time > 0 else 0
-                    speedup_lamar_vs_ants_default = ants_default_time / lamar_time if lamar_time > 0 else 0
-                    speedup_robust_vs_ants_default = ants_default_time / lamar_robust_time if lamar_robust_time > 0 else 0
-                    speedup_lamar_vs_ants_medium = ants_medium_time / lamar_time if lamar_time > 0 else 0
-                    speedup_robust_vs_ants_medium = ants_medium_time / lamar_robust_time if lamar_robust_time > 0 else 0
-                    speedup_lamar_vs_fsl = fsl_time / lamar_time if lamar_time > 0 else 0
-                    speedup_robust_vs_fsl = fsl_time / lamar_robust_time if lamar_robust_time > 0 else 0
-
-                    # Get metrics
-                    mi = quality_results.get("mi", {})
-                    antsneighborhoodcorrelation = quality_results.get("antsneighborhoodcorrelation", {})
-                    mind = quality_results.get("mind", {})
-                    ngf = quality_results.get("ngf", {})
+                    # Initialize empty metrics if no quality results
+                    if not quality_results:
+                        mi = {}
+                        antsneighborhoodcorrelation = {}
+                        mind = {}
+                        ngf = {}
+                    else:
+                        # Get metrics
+                        mi = quality_results.get("mi", {})
+                        antsneighborhoodcorrelation = quality_results.get("antsneighborhoodcorrelation", {})
+                        mind = quality_results.get("mind", {})
+                        ngf = quality_results.get("ngf", {})
 
                     # Create row data with all methods including FSL
                     row_data = {
@@ -373,14 +441,6 @@ def main():
                         "ants_default_time": f"{ants_default_time:.2f}",
                         "ants_medium_time": f"{ants_medium_time:.2f}",
                         "fsl_time": f"{fsl_time:.2f}",
-                        "speedup_lamar_vs_ants": f"{speedup_lamar_vs_ants:.2f}",
-                        "speedup_robust_vs_ants": f"{speedup_robust_vs_ants:.2f}",
-                        "speedup_lamar_vs_ants_default": f"{speedup_lamar_vs_ants_default:.2f}",
-                        "speedup_robust_vs_ants_default": f"{speedup_robust_vs_ants_default:.2f}",
-                        "speedup_lamar_vs_ants_medium": f"{speedup_lamar_vs_ants_medium:.2f}",
-                        "speedup_robust_vs_ants_medium": f"{speedup_robust_vs_ants_medium:.2f}",
-                        "speedup_lamar_vs_fsl": f"{speedup_lamar_vs_fsl:.2f}",
-                        "speedup_robust_vs_fsl": f"{speedup_robust_vs_fsl:.2f}",
                         "mi_lamar": f"{mi.get('lamar', 'N/A')}" if mi else "N/A",
                         "mi_lamar_robust": f"{mi.get('lamar_robust', 'N/A')}" if mi else "N/A",
                         "mi_ants": f"{mi.get('ants', 'N/A')}" if mi else "N/A",
@@ -432,16 +492,38 @@ def main():
                     
                     print(f"    Completed registration for {subject_folder}_{session_folder}")
                     print(f"    Times: LaMAR: {lamar_time:.2f}s, LaMAR robust: {lamar_robust_time:.2f}s, ANTs: {ants_time:.2f}s, ANTs default: {ants_default_time:.2f}s, ANTs medium: {ants_medium_time:.2f}s, FSL: {fsl_time:.2f}s")
-                    print(f"    Speedups vs ANTs: LaMAR: {speedup_lamar_vs_ants:.2f}x, LaMAR robust: {speedup_robust_vs_ants:.2f}x")
-                    print(f"    Speedups vs ANTs default: LaMAR: {speedup_lamar_vs_ants_default:.2f}x, LaMAR robust: {speedup_robust_vs_ants_default:.2f}x")
-                    print(f"    Speedups vs ANTs medium: LaMAR: {speedup_lamar_vs_ants_medium:.2f}x, LaMAR robust: {speedup_robust_vs_ants_medium:.2f}x")
-                    print(f"    Speedups vs FSL: LaMAR: {speedup_lamar_vs_fsl:.2f}x, LaMAR robust: {speedup_robust_vs_fsl:.2f}x")
                     print(f"    Results appended to {results_csv}")
+                    
+                    # Free up memory
+                    if 'quality_results' in locals():
+                        del quality_results
+                    if 'mi' in locals():
+                        del mi
+                    if 'antsneighborhoodcorrelation' in locals():
+                        del antsneighborhoodcorrelation
+                    if 'mind' in locals():
+                        del mind
+                    if 'ngf' in locals():
+                        del ngf
+                        
+                    # Clear any PyTorch cache
+                    torch.cuda.empty_cache() if torch.cuda.is_available() else None
+                    
+                    # Force garbage collection
+                    gc.collect()
+                    
                 else:
                     print(f"    Missing T1w or DWI scan, skipping")
             except Exception as e:
                 print(f"    Error processing session {session_folder}: {e}")
                 continue
+
+        # Increment subject counter and perform GC every few subjects
+        subject_count += 1
+        if subject_count % 3 == 0:  # Every 3 subjects
+            print("Performing thorough memory cleanup...")
+            gc.collect()
+            torch.cuda.empty_cache() if torch.cuda.is_available() else None
 
     print(f"\nRegistration batch processing complete. Results saved to {results_csv}")
 
