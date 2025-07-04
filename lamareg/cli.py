@@ -216,13 +216,13 @@ def main():
     register_parser.add_argument(
         "--synthseg-threads",
         type=int,
-        default=1,
+        default=DEFAULT_THREADS,
         help="Number of threads to use for SynthSeg segmentation (default: 1)",
     )
     register_parser.add_argument(
         "--ants-threads",
         type=int,
-        default=1,
+        default=DEFAULT_THREADS,
         help="Number of threads to use for ANTs registration (default: 1)",
     )
     register_parser.add_argument(
@@ -290,13 +290,13 @@ def main():
     warpfield_parser.add_argument(
         "--synthseg-threads",
         type=int,
-        default=1,
+        default=DEFAULT_THREADS,
         help="Number of threads to use for SynthSeg segmentation (default: 1)",
     )
     warpfield_parser.add_argument(
         "--ants-threads",
         type=int,
-        default=1,
+        default=DEFAULT_THREADS,
         help="Number of threads to use for ANTs registration (default: 1)",
     )
     warpfield_parser.add_argument(
@@ -327,7 +327,7 @@ def main():
     apply_parser.add_argument(
         "--ants-threads",
         type=int,
-        default=1,
+        default=DEFAULT_THREADS,
         help="Number of threads to use for ANTs transformation (default: 1)",
     )
 
@@ -342,7 +342,7 @@ def main():
     )
     synthseg_parser.add_argument("--cpu", action="store_true", help="Use CPU")
     synthseg_parser.add_argument(
-        "--threads", type=int, default=1, help="Number of threads"
+        "--threads", type=int, default=DEFAULT_THREADS, help="Number of threads"
     )
     # Add other SynthSeg arguments as needed
 
