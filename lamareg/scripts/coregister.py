@@ -144,7 +144,7 @@ def combine_warps_and_transform(
     combined_warp_output_path
 ):
     """
-    Combines two warp fields, resampling the second to match the first if needed.
+    Combines two warp fields, resampling the first warp to match the second warp if needed.
     
     Args:
         first_warp_path (str): Path to the first warp field
@@ -152,19 +152,19 @@ def combine_warps_and_transform(
         combined_warp_output_path (str): Path to save the combined warp field
     """
     # Load warp fields
-    second_warp_nib = nib.load(second_warp_path)
     first_warp_nib = nib.load(first_warp_path)
+    second_warp_nib = nib.load(second_warp_path)
     
     # Check if dimensions or affine transformations differ
     dims_match = (first_warp_nib.shape == second_warp_nib.shape)
     affine_match = np.allclose(first_warp_nib.affine, second_warp_nib.affine)
     
     if not (dims_match and affine_match):
-        print(f"Resampling second warp to match first warp's dimensions and affine...")
+        print(f"Resampling first warp to match second warp's dimensions and affine...")
         
         # Extract each component (x, y, z) and resample separately
         components = []
-        for i in range(first_warp_nib.shape[-1]):
+        for i in range(second_warp_nib.shape[-1]):  # Use the second warp's shape
             # Create temporary files for each component
             first_comp_file = f"/tmp/first_comp_{i}.nii.gz"
             second_comp_file = f"/tmp/second_comp_{i}.nii.gz"
@@ -182,10 +182,10 @@ def combine_warps_and_transform(
             first_comp = ants.image_read(first_comp_file)
             second_comp = ants.image_read(second_comp_file)
             
-            # Resample second component to match first
+            # Resample first component to match second
             resampled_comp = ants.resample_image_to_target(
-                second_comp, 
-                first_comp,
+                first_comp, 
+                second_comp,
                 interp_type='linear'
             )
             
@@ -200,18 +200,19 @@ def combine_warps_and_transform(
                 pass
         
         # Combine components into a single array
-        resampled_second_arr = np.stack(components, axis=-1)
-        second_arr = resampled_second_arr
+        resampled_first_arr = np.stack(components, axis=-1)
+        first_arr = resampled_first_arr
+        second_arr = second_warp_nib.get_fdata().squeeze()
     else:
         # If dimensions match, just get the data
+        first_arr = first_warp_nib.get_fdata().squeeze()
         second_arr = second_warp_nib.get_fdata().squeeze()
     
-    # Get first warp data and add
-    first_arr = first_warp_nib.get_fdata().squeeze()
+    # Add the displacements (this combines the transforms)
     combined_arr = first_arr + second_arr
     
     # Create and save the combined warp field
-    combined_warp = nib.Nifti1Image(combined_arr, first_warp_nib.affine, first_warp_nib.header)
+    combined_warp = nib.Nifti1Image(combined_arr, second_warp_nib.affine, second_warp_nib.header)
     combined_warp.to_filename(combined_warp_output_path)
     print(f"Combined warp field saved as {combined_warp_output_path}")
 
