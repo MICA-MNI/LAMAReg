@@ -52,6 +52,7 @@ import os
 import multiprocessing
 import nibabel as nib
 import numpy as np
+import tempfile
 
 init()
 
@@ -165,9 +166,12 @@ def combine_warps_and_transform(
         # Extract each component (x, y, z) and resample separately
         components = []
         for i in range(second_warp_nib.shape[-1]):  # Use the second warp's shape
-            # Create temporary files for each component
-            first_comp_file = f"/tmp/first_comp_{i}.nii.gz"
-            second_comp_file = f"/tmp/second_comp_{i}.nii.gz"
+            # Create temporary files for each component using tempfile module
+            with tempfile.NamedTemporaryFile(suffix=f"_first_comp_{i}.nii.gz", delete=False) as tmp_first:
+                first_comp_file = tmp_first.name
+            
+            with tempfile.NamedTemporaryFile(suffix=f"_second_comp_{i}.nii.gz", delete=False) as tmp_second:
+                second_comp_file = tmp_second.name
             
             # Save component slices to temporary files
             first_comp_data = first_warp_nib.get_fdata()[..., i]
