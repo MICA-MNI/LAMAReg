@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Example script for contrast-agnostic registration using SynthSeg
 
@@ -27,9 +26,12 @@ def lamareg(
     output_image=None,
     input_parc=None,
     reference_parc=None,
-    registered_parc=None,
-    warp_file=None,
+    output_parc=None,
+    generate_warpfield=False,
+    apply_warpfield=False,
+    registration_method="SyNRA",
     affine_file=None,
+    warp_file=None,
     inverse_warp_file=None,
     inverse_affine_file=None,
     synthseg_threads=DEFAULT_THREADS,
