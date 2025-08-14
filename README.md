@@ -92,7 +92,7 @@ lamar dice-compare [options]  # Calculate Dice similarity coefficient
 - `--skip-fixed-parc` : Skip fixed image parcellation if it already exists
 - `--skip-moving-parc` : Skip moving image parcellation if it already exists
 - `--skip-qc` : Skip quality control metrics calculation
-- `--robust` : Use two-stage robust registration for challenging cases
+- `--disable-robust` : Disable two-stage robust registration
 
 ### ANTs Registration Parameters
 
@@ -174,12 +174,12 @@ lamar register --moving example_data/sub-HC001_ses-02_space-dwi_desc-b0.nii.gz -
   --synthseg-threads 4 --ants-threads 8
 ```
 
-### Register with robust two-stage approach for challenging cases:
+### Register without robust two-stage approach:
 ```bash
 lamar register --moving subject_flair.nii.gz --fixed subject_t1w.nii.gz \
   --output registered_flair.nii.gz --moving-parc flair_parcellation.nii.gz \
   --fixed-parc t1w_parcellation.nii.gz --affine flair_to_t1w_affine.mat \
-  --warpfield flair_to_t1w_warp.nii.gz --robust
+  --warpfield flair_to_t1w_warp.nii.gz --disable-robust
 ```
 
 ### Generate parcellations separately:
@@ -236,12 +236,12 @@ This approach enables accurate registration between images with different contra
 
 ### Robust Registration Mode
 
-When using the `--robust` flag, LAMAReg performs a two-stage registration process:
+When not using the `--disable-robust` flag, LAMAReg performs a two-stage registration process:
 
 1. **First Stage**: Register parcellations (contrast-agnostic approach)
-2. **Second Stage**: Fine-tune with a second direct registration using the first result as initialization
+2. **Second Stage**: Fine-tune with a second direct nonlinear registration using the first result as initialization
 
-This two-stage approach can significantly improve registration accuracy for challenging cases where initial alignment is difficult, such as images with large geometric distortions or very different contrast mechanisms.
+This two-stage approach can improve registration accuracy for cases where initial alignment is difficult, such as images with large geometric distortions or very different contrast mechanisms. The only reason to disable this is if you wanted to run your own second stage, or to speed up the runtime.
 
 ## Directory Structure
 
