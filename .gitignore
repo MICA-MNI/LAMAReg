@@ -12,4 +12,5 @@ LAMAReg.egg-info/SOURCES.txt
 LAMAReg.egg-info/PKG-INFO
 /example_data
 /testout
-/registration_results_fixed
+/.vscode/
+

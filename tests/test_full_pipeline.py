@@ -145,7 +145,7 @@ def test_full_pipeline(quick=False):
 
     try:
         # Run the pipeline
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd)
         if result.returncode != 0:
             print(f"ERROR: Command failed with return code {result.returncode}")
             print("STDOUT:", result.stdout)

@@ -83,8 +83,7 @@ def print_cli_help():
       {YELLOW}--skip-fixed-parc{RESET}         : Toggle skipping fixed image parcellation
       {YELLOW}--skip-moving-parc{RESET}        : Toggle skipping moving image parcellation
       {YELLOW}--skip-qc{RESET}                 : Toggle skipping QC (default: False)
-      {YELLOW}--robust{RESET}                  : Use two-stage robust registration (default: False)
-      
+      {YELLOW}--disable-robust{RESET}          : Disable the two-stage robust registration (default: False)
 
     {CYAN}{BOLD}────────────────── GENERATE WARPFIELD ────────────────────{RESET}
     
@@ -111,12 +110,13 @@ def print_cli_help():
       {YELLOW}--affine{RESET} dwi_to_T1w_affine.mat {YELLOW}--warpfield{RESET} dwi_to_T1w_warp.nii.gz \\
       {YELLOW}--inverse-warpfield{RESET} T1w_to_dwi_warp.nii.gz {YELLOW}--inverse-affine{RESET} T1w_to_dwi_affine.mat \\
       {YELLOW}--synthseg-threads{RESET} 4 {YELLOW}--ants-threads{RESET} 8
-
-    {BLUE}# Register with robust two-stage approach for challenging cases:{RESET}
+      
+    {BLUE}# Register without robust two-stage approach for challenging cases:{RESET}
     lamar {GREEN}register{RESET} {YELLOW}--moving{RESET} subject_flair.nii.gz {YELLOW}--fixed{RESET} subject_t1w.nii.gz \\
       {YELLOW}--output{RESET} registered_flair.nii.gz {YELLOW}--moving-parc{RESET} flair_parcellation.nii.gz \\
       {YELLOW}--fixed-parc{RESET} t1w_parcellation.nii.gz {YELLOW}--affine{RESET} flair_to_t1w_affine.mat \\
-      {YELLOW}--warpfield{RESET} flair_to_t1w_warp.nii.gz {YELLOW}--robust{RESET}
+      {YELLOW}--warpfield{RESET} flair_to_t1w_warp.nii.gz {YELLOW}--disable-robust{RESET}
+
 
     {BLUE}# Generate parcellations separately:{RESET}
     lamar {GREEN}synthseg{RESET} {YELLOW}--i{RESET} subject_t1w.nii.gz {YELLOW}--o{RESET} t1w_parcellation.nii.gz {YELLOW}--parc{RESET}
@@ -216,13 +216,13 @@ def main():
     register_parser.add_argument(
         "--synthseg-threads",
         type=int,
-        default=1,
+        default=DEFAULT_THREADS,
         help="Number of threads to use for SynthSeg segmentation (default: 1)",
     )
     register_parser.add_argument(
         "--ants-threads",
         type=int,
-        default=1,
+        default=DEFAULT_THREADS,
         help="Number of threads to use for ANTs registration (default: 1)",
     )
     register_parser.add_argument(
@@ -232,9 +232,9 @@ def main():
         "--skip-qc", action="store_true", help="whether to skip QC (default: False)"
     )
     register_parser.add_argument(
-        "--robust",
+        "--disable-robust",
         action="store_true",
-        help="Whether to use robust registration (default: False)",
+        help="Whether to disable robust registration (default: False)",
     )
 
     # WORKFLOW 2: Generate warpfield only
@@ -290,13 +290,13 @@ def main():
     warpfield_parser.add_argument(
         "--synthseg-threads",
         type=int,
-        default=1,
+        default=DEFAULT_THREADS,
         help="Number of threads to use for SynthSeg segmentation (default: 1)",
     )
     warpfield_parser.add_argument(
         "--ants-threads",
         type=int,
-        default=1,
+        default=DEFAULT_THREADS,
         help="Number of threads to use for ANTs registration (default: 1)",
     )
     warpfield_parser.add_argument(
@@ -306,9 +306,9 @@ def main():
         "--skip-qc", action="store_true", help="whether to skip QC (default: False)"
     )
     warpfield_parser.add_argument(
-        "--robust",
+        "--disable-robust",
         action="store_true",
-        help="Whether to use robust registration (default: False)",
+        help="Whether to disable robust registration (default: False)",
     )
 
     # WORKFLOW 3: Apply existing warpfield
@@ -327,7 +327,7 @@ def main():
     apply_parser.add_argument(
         "--ants-threads",
         type=int,
-        default=1,
+        default=DEFAULT_THREADS,
         help="Number of threads to use for ANTs transformation (default: 1)",
     )
 
@@ -342,7 +342,7 @@ def main():
     )
     synthseg_parser.add_argument("--cpu", action="store_true", help="Use CPU")
     synthseg_parser.add_argument(
-        "--threads", type=int, default=1, help="Number of threads"
+        "--threads", type=int, default=DEFAULT_THREADS, help="Number of threads"
     )
     # Add other SynthSeg arguments as needed
 
@@ -447,7 +447,7 @@ def main():
                 skip_moving_parc=args.skip_moving_parc,
                 skip_qc=args.skip_qc,
                 qc_csv=args.qc_csv,
-                robust=args.robust,
+                disable_robust=args.disable_robust,
             )
 
             # Clean up temporary files after successful completion
@@ -518,7 +518,7 @@ def main():
                 skip_moving_parc=args.skip_moving_parc,
                 skip_qc=args.skip_qc,
                 qc_csv=args.qc_csv,
-                robust=args.robust,
+                disable_robust=args.disable_robust,
             )
 
             # Clean up temporary files after successful completion

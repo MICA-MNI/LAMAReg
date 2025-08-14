@@ -50,6 +50,10 @@ import sys
 from colorama import init, Fore, Style
 import os
 import multiprocessing
+import nibabel as nib
+import numpy as np
+import tempfile
+
 
 init()
 
@@ -136,6 +140,88 @@ def print_help():
     print(help_text)
 
 
+def combine_warps_and_transform(
+    first_warp_path, 
+    second_warp_path,
+    combined_warp_output_path
+):
+    """
+    Combines two warp fields, resampling the first warp to match the second warp if needed.
+    
+    Args:
+        first_warp_path (str): Path to the first warp field
+        second_warp_path (str): Path to the second warp field
+        combined_warp_output_path (str): Path to save the combined warp field
+    """
+    # Load warp fields
+    first_warp_nib = nib.load(first_warp_path)
+    second_warp_nib = nib.load(second_warp_path)
+    
+    # Check if dimensions or affine transformations differ
+    dims_match = (first_warp_nib.shape == second_warp_nib.shape)
+    affine_match = np.allclose(first_warp_nib.affine, second_warp_nib.affine)
+    
+    if not (dims_match and affine_match):
+        print(f"Resampling first warp to match second warp's dimensions and affine...")
+        
+        # Extract each component (x, y, z) and resample separately
+        components = []
+        for i in range(second_warp_nib.shape[-1]):  # Use the second warp's shape
+            # Create temporary files for each component using tempfile module
+            with tempfile.NamedTemporaryFile(suffix=f"_first_comp_{i}.nii.gz", delete=False) as tmp_first:
+                first_comp_file = tmp_first.name
+            
+            with tempfile.NamedTemporaryFile(suffix=f"_second_comp_{i}.nii.gz", delete=False) as tmp_second:
+                second_comp_file = tmp_second.name
+            
+            # Save component slices to temporary files
+            first_comp_data = first_warp_nib.get_fdata()[..., i]
+            first_comp_nib = nib.Nifti1Image(first_comp_data, first_warp_nib.affine)
+            first_comp_nib.to_filename(first_comp_file)
+            
+            second_comp_data = second_warp_nib.get_fdata()[..., i]
+            second_comp_nib = nib.Nifti1Image(second_comp_data, second_warp_nib.affine)
+            second_comp_nib.to_filename(second_comp_file)
+            
+            # Read the components using ANTs
+            first_comp = ants.image_read(first_comp_file)
+            second_comp = ants.image_read(second_comp_file)
+            
+            # Resample first component to match second
+            resampled_comp = ants.resample_image_to_target(
+                first_comp, 
+                second_comp,
+                interp_type='linear'
+            )
+            
+            # Store the resampled component
+            components.append(resampled_comp.numpy())
+            
+            # Clean up temporary files
+            try:
+                os.remove(first_comp_file)
+                os.remove(second_comp_file)
+            except:
+                pass
+        
+        # Combine components into a single array
+        resampled_first_arr = np.stack(components, axis=-1)
+        first_arr = resampled_first_arr
+        second_arr = second_warp_nib.get_fdata().squeeze()
+    else:
+        # If dimensions match, just get the data
+        first_arr = first_warp_nib.get_fdata().squeeze()
+        second_arr = second_warp_nib.get_fdata().squeeze()
+    
+    # Add the displacements (this combines the transforms)
+    combined_arr = first_arr + second_arr
+    
+    # Create and save the combined warp field
+    combined_warp = nib.Nifti1Image(combined_arr, second_warp_nib.affine, second_warp_nib.header)
+    combined_warp.to_filename(combined_warp_output_path)
+    print(f"Combined warp field saved as {combined_warp_output_path}")
+
+
 def ants_linear_nonlinear_registration(
     fixed_file,
     moving_file,
@@ -203,6 +289,7 @@ def ants_linear_nonlinear_registration(
     if initial_transform == []:
         initial_transform = None
 
+
     # Pass all arguments to ants.registration, including any extra kwargs
     transforms = ants.registration(
         fixed=fixed,
@@ -226,23 +313,36 @@ def ants_linear_nonlinear_registration(
         print(f"Registration complete. Saved registered image as {out_file}")
 
     if warp_file:
-        if transforms["fwdtransforms"][1].endswith(".nii.gz"):
-            shutil.copyfile(transforms["fwdtransforms"][1], warp_file.replace(".nii.gz", "_stage1.nii.gz"))
-            print(f"Saved warp field as {warp_file}")
-            shutil.copyfile(transforms["fwdtransforms"][0], warp_file.replace(".nii.gz", "_stage2.nii.gz"))
+        if initial_warp_file:
+            combine_warps_and_transform(
+                transforms["fwdtransforms"][0],
+                transforms["fwdtransforms"][1],
+                warp_file,)
             print(f"Saved warp field as {warp_file}")
         else:
             shutil.copyfile(transforms["fwdtransforms"][0], warp_file)
             print(f"Saved warp field as {warp_file}")
+
     if affine_file:
-        shutil.copyfile(transforms["fwdtransforms"][1], affine_file)
-        print(f"Saved affine transform as {affine_file}")
+        if initial_affine_file:
+            shutil.copyfile(transforms["fwdtransforms"][2], affine_file)
+            print(f"Saved affine transform as {affine_file}")
+        else:
+            shutil.copyfile(transforms["fwdtransforms"][1], affine_file)
+            print(f"Saved affine transform as {affine_file}")
     if rev_warp_file:
-        shutil.copyfile(transforms["invtransforms"][1], rev_warp_file)
-        print(f"Saved reverse warp field as {rev_warp_file}")
+        if initial_warp_file:
+            combine_warps_and_transform(
+                transforms["invtransforms"][2],
+                transforms["invtransforms"][1],
+                warp_file,)
+        else:
+            shutil.copyfile(transforms["invtransforms"][1], rev_warp_file)
+            print(f"Saved reverse warp field as {rev_warp_file}")
     if rev_affine_file:
         shutil.copyfile(transforms["invtransforms"][0], rev_affine_file)
         print(f"Saved reverse affine transform as {rev_affine_file}")
+
     print("All specified outputs saved successfully.")
     print("Cleaning up temporary files...")
     temp_files_to_delete = set(transforms['fwdtransforms'] + transforms['invtransforms'])
