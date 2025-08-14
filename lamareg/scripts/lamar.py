@@ -18,7 +18,8 @@ import os
 import argparse
 import subprocess
 import sys
-
+import multiprocessing
+DEFAULT_THREADS = multiprocessing.cpu_count()
 
 def lamareg(
     input_image,
@@ -34,8 +35,8 @@ def lamareg(
     warp_file=None,
     inverse_warp_file=None,
     inverse_affine_file=None,
-    synthseg_threads=1,
-    ants_threads=1,
+    synthseg_threads=DEFAULT_THREADS,
+    ants_threads=DEFAULT_THREADS,
     qc_csv=None,
     skip_fixed_parc=False,
     skip_moving_parc=False,
@@ -248,9 +249,9 @@ def lamareg(
             cmd = [
                 "lamar",
                 "coregister",
-                "--fixed-file",
+                "--fixed",
                 reference_parc,
-                "--moving-file",
+                "--moving",
                 input_parc,
                 "--registration-method",
                 registration_method,
@@ -267,10 +268,10 @@ def lamareg(
                 cmd.extend(["--warp-file", warp_file])
 
             if inverse_warp_file:
-                cmd.extend(["--rev-warp-file", inverse_warp_file])
+                cmd.extend(["--inverse-warp-file", inverse_warp_file])  # Standardized name
 
             if inverse_affine_file:
-                cmd.extend(["--rev-affine-file", inverse_affine_file])
+                cmd.extend(["--inverse-affine-file", inverse_affine_file])  # Standardized name
 
             subprocess.run(cmd, check=True, env=env)
             if robust:
@@ -280,9 +281,9 @@ def lamareg(
                 robust_cmd = [
                     "lamar",
                     "coregister",
-                    "--fixed-file",
+                    "--fixed",
                     reference_image,
-                    "--moving-file",
+                    "--moving",
                     input_image,
                     "--interpolator",
                     "linear",
@@ -301,24 +302,16 @@ def lamareg(
 
                 # Only include transform file flags if paths were provided
                 if affine_file:
-                    affine_file_stage2 = affine_file.replace(".mat", "_stage2.mat")
-                    robust_cmd.extend(["--affine-file", affine_file_stage2])
+                    robust_cmd.extend(["--affine-file", affine_file])
 
                 if warp_file:
-                    warp_file_stage2 = warp_file.replace(".nii.gz", "_stage2.nii.gz")
-                    robust_cmd.extend(["--warp-file", warp_file_stage2])
+                    robust_cmd.extend(["--warp-file", warp_file])
 
                 if inverse_warp_file:
-                    inverse_warp_file_stage2 = inverse_warp_file.replace(
-                        ".nii.gz", "_stage2.nii.gz"
-                    )
-                    robust_cmd.extend(["--rev-warp-file", inverse_warp_file_stage2])
+                    robust_cmd.extend(["--inverse-warp-file", inverse_warp_file])
 
                 if inverse_affine_file:
-                    inverse_affine_file_stage2 = inverse_affine_file.replace(
-                        ".mat", "_stage2.mat"
-                    )
-                    robust_cmd.extend(["--rev-affine-file", inverse_affine_file_stage2])
+                    robust_cmd.extend(["--inverse-affine-file", inverse_affine_file])
 
                 subprocess.run(robust_cmd, check=True, env=env)
             # Run Dice evaluation after coregistration
@@ -331,7 +324,7 @@ def lamareg(
                 )
 
                 print(
-                    "\n--- Step 2.1: Calculating Dice scores to evaluate registration quality ---"
+                    "\n--- Step 3: Calculating Dice scores to evaluate registration quality ---"
                 )
                 try:
                     from lamareg.scripts.dice_compare import compare_parcellations_dice
@@ -363,20 +356,20 @@ def lamareg(
         if not robust:
             if not generate_warpfield and output_image is not None:
                 print(
-                    "\n--- Step 3: Applying transformation to original input image ---"
+                    "\n--- Step 4: Applying transformation to original input image ---"
                 )
                 apply_cmd = [
                     "lamar",
                     "apply-warp",  # Use hyphen instead of underscore
                     "--moving",
                     input_image,
-                    "--reference",
+                    "--fixed",  # Changed from --reference to --fixed
                     reference_image,
                     "--output",
                     output_image,
                 ]
 
-                # Only include transform flags if files were provided
+                # Only include transform file flags if files were provided
                 if affine_file:
                     apply_cmd.extend(["--affine", affine_file])
 
@@ -454,13 +447,13 @@ def main():
     parser.add_argument(
         "--synthseg-threads",
         type=int,
-        default=1,
+        default=DEFAULT_THREADS,
         help="Number of threads to use for SynthSeg segmentation",
     )
     parser.add_argument(
         "--ants-threads",
         type=int,
-        default=1,
+        default=DEFAULT_THREADS,
         help="Number of threads to use for ANTs registration",
     )
     parser.add_argument("--qc-csv", help="Path for quality control Dice score CSV file")

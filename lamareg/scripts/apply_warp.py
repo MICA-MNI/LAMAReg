@@ -71,7 +71,7 @@ def print_help():
     
     {CYAN}{BOLD}────────────────────────── REQUIRED ARGUMENTS ──────────────────────────{RESET}
       {YELLOW}--moving{RESET}     : Path to the input image to be warped (.nii.gz)
-      {YELLOW}--reference{RESET}  : Path to the target/reference image (.nii.gz)
+      {YELLOW}--fixed{RESET}      : Path to the target/reference image (.nii.gz)
       {YELLOW}--affine{RESET}     : Path to the affine transformation file (.mat)
       {YELLOW}--warp{RESET}       : Path to the warp field (.nii.gz)
     
@@ -81,13 +81,8 @@ def print_help():
     {CYAN}{BOLD}────────────────────────── EXAMPLE USAGE ──────────────────────────{RESET}
     
     {BLUE}# Apply warp transformation{RESET}
-    micaflow {GREEN}apply_warp{RESET} {YELLOW}--moving{RESET} subject_t1w.nii.gz {YELLOW}--reference{RESET} mni152.nii.gz \\
+    micaflow {GREEN}apply_warp{RESET} {YELLOW}--moving{RESET} subject_t1w.nii.gz {YELLOW}--fixed{RESET} mni152.nii.gz \\
       {YELLOW}--affine{RESET} transform.mat {YELLOW}--warp{RESET} warpfield.nii.gz {YELLOW}--output{RESET} registered_t1w.nii.gz
-    
-    {CYAN}{BOLD}────────────────────────── NOTES ──────────────────────────{RESET}
-    {MAGENTA}•{RESET} The order of transforms matters: the warp field is applied first, 
-      followed by the affine transformation.
-    {MAGENTA}•{RESET} This is the standard order in ANTs for composite transformations.
     """
 
     print(help_text)
@@ -147,12 +142,6 @@ def apply_warp(
 
 
 def main():
-    # Check if no arguments were provided
-    print(len(sys.argv))
-    if len(sys.argv) == 1 or "-h" in sys.argv or "--help" in sys.argv:
-        print_help()
-        sys.exit(0)
-
     parser = argparse.ArgumentParser(
         description="Apply an affine (.mat) and a warp field (.nii.gz) to an image using ANTsPy."
     )
@@ -160,7 +149,10 @@ def main():
         "--moving", required=True, help="Path to the moving image (.nii.gz)."
     )
     parser.add_argument(
-        "--reference", required=True, help="Path to the reference image (.nii.gz)."
+        "--fixed", required=True, help="Path to the fixed/reference image (.nii.gz)."
+    )
+    parser.add_argument(
+        "--output", default="warped_image.nii.gz", help="Output warped image filename."
     )
     parser.add_argument(
         "--affine", required=True, help="Path to the affine transform (.mat)."
@@ -169,17 +161,14 @@ def main():
         "--warp", required=True, help="Path to the warp field (.nii.gz)."
     )
     parser.add_argument(
-        "--output", default="warped_image.nii.gz", help="Output warped image filename."
-    )
-    parser.add_argument(
         "--interpolation",
         default="linear",
         help="Interpolation method (default: linear).",
     )
     args = parser.parse_args()
-    # Load images and transforms
+
     moving_img = ants.image_read(args.moving)
-    reference_img = ants.image_read(args.reference)
+    reference_img = ants.image_read(args.fixed)
 
     apply_warp(
         moving_img,

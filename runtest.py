@@ -20,6 +20,7 @@ import nibabel as nib
 import numpy as np
 import torch
 import ants
+import csv
 
 def run_lamar_registration(
     moving_img,
@@ -52,6 +53,7 @@ def run_lamar_registration(
     # Build command for lamar registration
     cmd = [
         "lamar",
+        "register",
         "--moving",
         moving_img,
         "--fixed",
@@ -120,8 +122,8 @@ def run_lamar_registration_robust(
     # Build command for lamar coregister with initial transforms
     cmd = [
         "lamar", "coregister",
-        "--fixed-file", fixed_img,
-        "--moving-file", moving_img,
+        "--fixed", fixed_img,
+        "--moving", moving_img,
         "--output", output_img,
         "--warp-file", warp_file,
         "--affine-file", affine_file,
@@ -434,8 +436,74 @@ def run_fsl_registration(
     return elapsed_time, output_img
 
 
+def run_easyreg_registration(
+    moving_img,
+    fixed_img,
+    output_dir,
+    threads=1,
+    verbose=True,
+    force=False,
+    affine_only=False
+):
+    """Run registration using FreeSurfer's mri_easyreg and measure time."""
+    # Set up output paths
+    output_img = os.path.join(output_dir, "easyreg_registered.nii.gz")
+    
+    # Skip if output already exists and not forced to rerun
+    if os.path.exists(output_img) and not force:
+        if verbose:
+            print(f"Output {output_img} already exists. Skipping EasyReg registration.")
+        return 0.0, output_img
+    
+    start_time = time.time()
+    
+    # Setup paths for intermediate files
+    prefix = os.path.join(output_dir, "easyreg")
+    ref_seg = f"{prefix}_ref_seg.mgz"
+    flo_seg = f"{prefix}_flo_seg.mgz"
+    fwd_field = f"{prefix}_fwd_field.mgz"
+    bak_field = f"{prefix}_bak_field.mgz"
+    
+    # Build the mri_easyreg command
+    cmd = [
+        "python", 
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "easyreg.py"),
+        "--ref", fixed_img,
+        "--flo", moving_img,
+        "--out", prefix,
+        "--threads", str(threads)
+    ]
+    
+    if affine_only:
+        cmd.append("--affine_only")
+        
+    if verbose:
+        cmd.append("--verbose")
+    
+    # Run EasyReg registration
+    try:
+        if verbose:
+            print(f"Running EasyReg with command: {' '.join(cmd)}")
+        subprocess.run(cmd, check=True)
+        
+        # EasyReg outputs the registered image as flo_in_ref.mgz
+        registered_img = f"{prefix}_flo_in_ref.nii.gz"
+        shutil.copy(registered_img, output_img)
+            
+    except Exception as e:
+        print(f"Error during EasyReg registration: {e}")
+        if os.path.exists(output_img):
+            os.remove(output_img)
+        elapsed_time = time.time() - start_time
+        return elapsed_time, None
+    
+    elapsed_time = time.time() - start_time
+    return elapsed_time, output_img
+
+
 def compare_registration_quality(lamar_output, ants_output, fixed_img, lamar_robust_output=None, 
-                               ants_default_output=None, ants_medium_output=None, fsl_output=None):
+                               ants_default_output=None, ants_medium_output=None, fsl_output=None,
+                               easyreg_output=None, subject_id=None, session_id=None, results_csv=None):
     """Compare the registration quality using all available metrics.
 
     Args:
@@ -446,24 +514,45 @@ def compare_registration_quality(lamar_output, ants_output, fixed_img, lamar_rob
         ants_default_output: Path to ANTs registered image with default parameters (optional)
         ants_medium_output: Path to ANTs registered image with medium iterations (optional)
         fsl_output: Path to FSL registered image (optional)
+        easyreg_output: Path to FreeSurfer EasyReg registered image (optional)
+        subject_id: Subject ID for CSV lookup (optional)
+        session_id: Session ID for CSV lookup (optional) 
+        results_csv: Path to results CSV file (optional)
 
     Returns:
         Dictionary with results for all metrics or None if no registrations to compare
     """
+    # Check if metrics already exist for this subject/session
+    if subject_id and session_id and results_csv and os.path.exists(results_csv):
+        try:
+            with open(results_csv, 'r', newline='') as csvfile:
+                reader = csv.DictReader(csvfile)
+                for row in reader:
+                    if row.get('subject_id') == subject_id and row.get('session_id') == session_id:
+                        # Check if metrics exist for any method
+                        metric_fields = ['mi_', 'antsneighborhoodcorrelation_', 'mind_', 'ngf_']
+                        if any(field in key and row[key] != 'N/A' for key in row for field in metric_fields):
+                            print(f"    Metrics already exist in CSV for {subject_id}/{session_id}, skipping calculation")
+                            return None
+        except Exception as e:
+            print(f"    Warning: Error checking CSV for existing metrics: {e}")
+    
     # First, check if any registration was actually performed
     # We need at least one registration output to compare
     if not os.path.exists(lamar_output) and not os.path.exists(ants_output) and \
        (not lamar_robust_output or not os.path.exists(lamar_robust_output)) and \
        (not ants_default_output or not os.path.exists(ants_default_output)) and \
        (not ants_medium_output or not os.path.exists(ants_medium_output)) and \
-       (not fsl_output or not os.path.exists(fsl_output)):
+       (not fsl_output or not os.path.exists(fsl_output)) and \
+       (not easyreg_output or not os.path.exists(easyreg_output)):
         print("No registration outputs available for quality assessment")
         return None
     
     # We need at least two registered images to compare
     valid_outputs = 0
     for img_path in [lamar_output, ants_output, lamar_robust_output, 
-                     ants_default_output, ants_medium_output, fsl_output]:
+                     ants_default_output, ants_medium_output, fsl_output,
+                     easyreg_output]:
         if img_path and os.path.exists(img_path):
             valid_outputs += 1
     
@@ -492,6 +581,8 @@ def compare_registration_quality(lamar_output, ants_output, fixed_img, lamar_rob
     ants_medium_tensor = None
     fsl_data = None
     fsl_tensor = None
+    easyreg_data = None
+    easyreg_tensor = None
     
     # Load only available images
     if os.path.exists(lamar_output):
@@ -523,6 +614,12 @@ def compare_registration_quality(lamar_output, ants_output, fixed_img, lamar_rob
         fsl_nib = nib.load(fsl_output)
         fsl_data = fsl_nib.get_fdata()
         fsl_tensor = torch.from_numpy(fsl_data).float().unsqueeze(0).unsqueeze(0)
+
+    # Load EasyReg output if available
+    if easyreg_output and os.path.exists(easyreg_output):
+        easyreg_nib = nib.load(easyreg_output)
+        easyreg_data = easyreg_nib.get_fdata()
+        easyreg_tensor = torch.from_numpy(easyreg_data).float().unsqueeze(0).unsqueeze(0)
 
     # Calculate Mutual Information using ANTsPy
     def mutual_information(img1, img2, bins=32):
@@ -580,7 +677,13 @@ def compare_registration_quality(lamar_output, ants_output, fixed_img, lamar_rob
     if fsl_data is not None:
         results["mi"]["fsl"] = mutual_information(fsl_data, fixed_img_data)
         results["antsneighborhoodcorrelation"]["fsl"] = ants_neighborhood_correlation(fsl_data, fixed_img_data)
-        
+    # After MI calculations for other methods, add:
+    if easyreg_data is not None:
+        results["mi"]["easyreg"] = mutual_information(easyreg_data, fixed_img_data)
+
+    # After ANTSNeighborhoodCorrelation calculations for other methods, add:
+    if easyreg_data is not None:
+        results["antsneighborhoodcorrelation"]["easyreg"] = ants_neighborhood_correlation(easyreg_data, fixed_img_data)
     # Try MIND metric
     try:
         from torch_mind import MINDLoss3D
@@ -601,6 +704,8 @@ def compare_registration_quality(lamar_output, ants_output, fixed_img, lamar_rob
                 results["mind"]["ants_medium"] = mind_loss(ants_medium_tensor, fixed_tensor).item()
             if fsl_tensor is not None:
                 results["mind"]["fsl"] = mind_loss(fsl_tensor, fixed_tensor).item()
+            if easyreg_tensor is not None:
+                results["mind"]["easyreg"] = mind_loss(easyreg_tensor, fixed_tensor).item()
     except Exception as e:
         print(f"Error calculating MIND: {e}")
         results["mind"] = None
@@ -632,6 +737,8 @@ def compare_registration_quality(lamar_output, ants_output, fixed_img, lamar_rob
                 results["ngf"]["ants_medium"] = ngf(ants_medium_tensor, fixed_tensor).item()
             if fsl_tensor is not None:
                 results["ngf"]["fsl"] = ngf(fsl_tensor, fixed_tensor).item()
+            if easyreg_tensor is not None:
+                results["ngf"]["easyreg"] = ngf(easyreg_tensor, fixed_tensor).item()
     except Exception as e:
         print(f"Error calculating NGF: {e}")
         results["ngf"] = None
@@ -642,7 +749,7 @@ def compare_registration_quality(lamar_output, ants_output, fixed_img, lamar_rob
 def main():
     """Run benchmark comparison between LaMAR and direct ANTs registration."""
     parser = argparse.ArgumentParser(
-        description="Benchmark LaMAR vs direct ANTs registration"
+        description="Batch registration between T1w and DWI scans"
     )
     parser.add_argument(
         "--moving", required=True, help="Input moving image to be registered"
@@ -684,6 +791,38 @@ def main():
     else:
         output_dir = args.output_dir
         os.makedirs(output_dir, exist_ok=True)
+
+    # Create output directory
+    os.makedirs(args.output_dir, exist_ok=True)
+
+    # Define CSV file path
+    results_csv = os.path.join(args.output_dir, "registration_results.csv")
+    
+    # Read existing CSV data to determine which subjects/sessions have already been processed
+    processed_sessions = set()
+    if os.path.isfile(results_csv):
+        try:
+            with open(results_csv, 'r', newline='') as csvfile:
+                reader = csv.DictReader(csvfile)
+                for row in reader:
+                    subject_id = row.get('subject_id')
+                    session_id = row.get('session_id')
+                    if subject_id and session_id:
+                        processed_sessions.add(f"{subject_id}_{session_id}")
+            print(f"Found {len(processed_sessions)} previously processed sessions in CSV")
+        except Exception as e:
+            print(f"Warning: Error reading existing CSV file: {e}")
+    
+    # Create CSV file with headers if it doesn't exist
+    fieldnames = [
+        # Existing fieldnames...
+    ]
+    
+    file_exists = os.path.isfile(results_csv)
+    if not file_exists:
+        with open(results_csv, "w", newline="") as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
 
     try:
         print(f"Running benchmark with {args.threads} thread(s)...")

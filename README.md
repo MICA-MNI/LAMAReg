@@ -81,14 +81,39 @@ lamar dice-compare [options]  # Calculate Dice similarity coefficient
 - `--registered-parc PATH` : Path for registered parcellation
 - `--affine PATH` : Path for affine transformation
 - `--warpfield PATH` : Path for warp field
-- `--inverse-warpfield PATH` : Path for inverse warp field
-- `--inverse-affine PATH` : Path for inverse affine transformation
 
 #### Optional Arguments:
 - `--registration-method STR` : Registration method (default: SyNRA)
 - `--synthseg-threads N` : SynthSeg threads (default: 1)
 - `--ants-threads N` : ANTs threads (default: 1)
 - `--qc-csv PATH` : Path for QC Dice score CSV file
+- `--inverse-warpfield PATH` : Path for inverse warp field
+- `--inverse-affine PATH` : Path for inverse affine transformation
+- `--skip-fixed-parc` : Skip fixed image parcellation if it already exists
+- `--skip-moving-parc` : Skip moving image parcellation if it already exists
+- `--skip-qc` : Skip quality control metrics calculation
+- `--robust` : Use two-stage robust registration for challenging cases
+
+### ANTs Registration Parameters
+
+When using `coregister` directly, additional ANTs parameters are available:
+
+- `--verbose` : Enable verbose output
+- `--grad-step FLOAT` : Gradient step size (default: 0.2)
+- `--flow-sigma FLOAT` : Smoothing for update field (default: 3)
+- `--total-sigma FLOAT` : Smoothing for total field (default: 0)
+- `--aff-metric STR` : Metric for affine stage (default: "mattes")
+- `--aff-sampling INT` : Sampling parameter for affine metric (default: 32)
+- `--syn-metric STR` : Metric for SyN stage (default: "mattes")
+- `--syn-sampling INT` : Sampling parameter for SyN metric (default: 32)
+- `--reg-iterations STR` : SyN iterations, comma-separated (e.g., "40,20,0")
+- `--aff-iterations STR` : Affine iterations, comma-separated (e.g., "2100,1200,1200,10")
+- `--aff-shrink-factors STR` : Affine shrink factors, comma-separated (e.g., "6,4,2,1")
+- `--aff-smoothing-sigmas STR` : Affine smoothing sigmas, comma-separated (e.g., "3,2,1,0")
+- `--random-seed INT` : Random seed for reproducibility
+- `--initial-affine-file PATH` : Path to initial affine transform to use
+- `--initial-warp-file PATH` : Path to initial warp field to use
+- `--interpolator STR` : Interpolation method (default: "genericLabel")
 
 ### Generate Warpfield
 
@@ -149,7 +174,13 @@ lamar register --moving example_data/sub-HC001_ses-02_space-dwi_desc-b0.nii.gz -
   --synthseg-threads 4 --ants-threads 8
 ```
 
-
+### Register with robust two-stage approach for challenging cases:
+```bash
+lamar register --moving subject_flair.nii.gz --fixed subject_t1w.nii.gz \
+  --output registered_flair.nii.gz --moving-parc flair_parcellation.nii.gz \
+  --fixed-parc t1w_parcellation.nii.gz --affine flair_to_t1w_affine.mat \
+  --warpfield flair_to_t1w_warp.nii.gz --robust
+```
 
 ### Generate parcellations separately:
 ```bash
@@ -161,9 +192,10 @@ lamar synthseg --i subject_flair.nii.gz --o flair_parcellation.nii.gz --parc
 ```bash
 lamar register --moving subject_flair.nii.gz --fixed subject_t1w.nii.gz \
   --output registered_flair.nii.gz --moving-parc flair_parcellation.nii.gz \
-  --fixed-parc t1w_parcellation.nii.gz --registered-parc registered_parcellation.nii.gz \
-  --affine flair_to_t1w_affine.mat --warpfield flair_to_t1w_warp.nii.gz \
-  --inverse-warpfield t1w_to_flair_warp.nii.gz --inverse-affine t1w_to_flair_affine.mat
+  --fixed-parc t1w_parcellation.nii.gz --skip-fixed-parc --skip-moving-parc \
+  --registered-parc registered_parcellation.nii.gz --affine flair_to_t1w_affine.mat \
+  --warpfield flair_to_t1w_warp.nii.gz --inverse-warpfield t1w_to_flair_warp.nii.gz \
+  --inverse-affine t1w_to_flair_affine.mat
 ```
 
 ### Apply existing warpfield:
@@ -202,6 +234,15 @@ LAMAReg's registration approach consists of three main steps:
 
 This approach enables accurate registration between images with different contrast properties where direct intensity-based registration might fail.
 
+### Robust Registration Mode
+
+When using the `--robust` flag, LAMAReg performs a two-stage registration process:
+
+1. **First Stage**: Register parcellations (contrast-agnostic approach)
+2. **Second Stage**: Fine-tune with a second direct registration using the first result as initialization
+
+This two-stage approach can significantly improve registration accuracy for challenging cases where initial alignment is difficult, such as images with large geometric distortions or very different contrast mechanisms.
+
 ## Directory Structure
 
 ```
@@ -232,6 +273,10 @@ LAMAR/
 - All output files need explicit paths to ensure deterministic behavior
 - The transforms can be reused with the apply-warpfield command
 - Use dice-compare to evaluate registration quality
+- The robust mode performs a two-stage registration for improved accuracy:
+  1. Register parcellations (contrast-agnostic)
+  2. Fine-tune with a second direct registration using the first result as initialization
+- For reproducible results, you can set a random seed when using the coregister command directly
 
 ## References
 

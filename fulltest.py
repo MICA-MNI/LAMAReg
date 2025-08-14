@@ -11,13 +11,16 @@ from runtest import (
     run_lamar_registration_robust,
     run_direct_ants_registration_default,
     run_direct_ants_registration_medium_iters,
-    run_fsl_registration,  # Add FSL registration import
+    run_fsl_registration,
+    run_easyreg_registration,  # Add this import
     compare_registration_quality,
 )
 from torch_mind import MIND3D
 
 
-def save_mind_descriptors(moving_img, fixed_img, lamar_output, ants_output, output_dir, lamar_robust_output=None, ants_default_output=None):
+def save_mind_descriptors(moving_img, fixed_img, lamar_output, ants_output, output_dir, 
+                         lamar_robust_output=None, ants_default_output=None,
+                         ants_medium_output=None, fsl_output=None, easyreg_output=None):
     """Extract and save MIND descriptors as multi-channel NIfTI images."""
     print("    Generating MIND descriptor visualizations...")
 
@@ -117,6 +120,28 @@ def save_mind_descriptors(moving_img, fixed_img, lamar_output, ants_output, outp
             del ants_default_mind_data, mind_ants_default, ants_default_tensor
             gc.collect()
 
+        # Add easyreg data loading
+        easyreg_data = None
+        easyreg_tensor = None
+        easyreg_nib = None
+        
+        if easyreg_output and os.path.exists(easyreg_output):
+            easyreg_nib = nib.load(easyreg_output)
+            easyreg_data = easyreg_nib.get_fdata()
+            easyreg_tensor = torch.from_numpy(easyreg_data).float().unsqueeze(0).unsqueeze(0)
+        
+        # Add easyreg MIND calculation
+        if easyreg_tensor is not None:
+            mind_easyreg = mind_descriptor(easyreg_tensor)
+            
+        # Save easyreg MIND descriptors
+        if mind_easyreg is not None:
+            easyreg_mind_data = np.transpose(mind_easyreg[0].numpy(), (1, 2, 3, 0))
+            easyreg_mind_nii = nib.Nifti1Image(easyreg_mind_data, easyreg_nib.affine, easyreg_nib.header)
+            nib.save(easyreg_mind_nii, os.path.join(mind_dir, "easyreg_mind.nii.gz"))
+            del easyreg_mind_data, mind_easyreg, easyreg_tensor
+            gc.collect()
+
         print(f"    MIND descriptors saved in {mind_dir}")
         
         # Final cleanup
@@ -156,7 +181,8 @@ def check_session_completed(output_dir):
         "direct_ants_registered.nii.gz", 
         "direct_ants_default_registered.nii.gz",
         "direct_ants_medium_registered.nii.gz",
-        "fsl_registered.nii.gz"  # Add FSL output file
+        "fsl_registered.nii.gz",
+        "easyreg_registered.nii.gz"  # Add EasyReg output file
     ]
     
     for file in required_files:
@@ -170,6 +196,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Batch registration between T1w and DWI scans"
     )
+    # Add existing arguments
     parser.add_argument(
         "--data-path",
         default="/host/verges/tank/data/ian/MICs_MF_Diffusion",
@@ -193,6 +220,12 @@ def main():
     parser.add_argument(
         "--force", action="store_true", help="Force reprocessing of completed sessions"
     )
+    # Add new argument for metrics-only mode
+    parser.add_argument(
+        "--metrics-only", 
+        action="store_true", 
+        help="Only calculate metrics on existing registrations (skip registration step)"
+    )
     args = parser.parse_args()
 
     # Create output directory
@@ -200,56 +233,51 @@ def main():
 
     # Define CSV file path
     results_csv = os.path.join(args.output_dir, "registration_results.csv")
+
+    # Define fieldnames for CSV based on the keys in row_data
     fieldnames = [
-        "subject_id",
-        "session_id",
-        "lamar_time",
-        "lamar_robust_time",
-        "ants_time",
-        "ants_default_time",
-        "ants_medium_time",
-        "fsl_time",  # Add FSL time field
-        "speedup_lamar_vs_ants",
-        "speedup_robust_vs_ants",
-        "speedup_lamar_vs_ants_default",
-        "speedup_robust_vs_ants_default",
-        "speedup_lamar_vs_ants_medium",
-        "speedup_robust_vs_ants_medium",
-        "speedup_lamar_vs_fsl",  # Add FSL speedup field
-        "speedup_robust_vs_fsl",  # Add FSL speedup field
-        "mi_lamar",
-        "mi_lamar_robust",
-        "mi_ants",
-        "mi_ants_default",
-        "mi_ants_medium",
-        "mi_fsl",  # Add FSL metric field
-        "antsneighborhoodcorrelation_lamar",
-        "antsneighborhoodcorrelation_lamar_robust",
-        "antsneighborhoodcorrelation_ants",
-        "antsneighborhoodcorrelation_ants_default",
-        "antsneighborhoodcorrelation_ants_medium",
-        "antsneighborhoodcorrelation_fsl",  # Add FSL metric field
-        "mind_lamar",
-        "mind_lamar_robust",
-        "mind_ants",
-        "mind_ants_default", 
-        "mind_ants_medium",
-        "mind_fsl",  # Add FSL metric field
-        "ngf_lamar",
-        "ngf_lamar_robust",
-        "ngf_ants",
-        "ngf_ants_default",
-        "ngf_ants_medium",
-        "ngf_fsl",  # Add FSL metric field
-        "mind_descriptors_dir",
+        "subject_id", "session_id", 
+        "lamar_time", "lamar_robust_time", "ants_time", "ants_default_time", 
+        "ants_medium_time", "fsl_time", "easyreg_time",
+        "speedup_lamar_vs_ants", "speedup_robust_vs_ants", 
+        "speedup_lamar_vs_ants_default", "speedup_robust_vs_ants_default",
+        "speedup_lamar_vs_ants_medium", "speedup_robust_vs_ants_medium",
+        "speedup_lamar_vs_fsl", "speedup_robust_vs_fsl",
+        "speedup_lamar_vs_easyreg", "speedup_robust_vs_easyreg",
+        "mi_lamar", "mi_lamar_robust", "mi_ants", "mi_ants_default", 
+        "mi_ants_medium", "mi_fsl", "mi_easyreg",
+        "antsneighborhoodcorrelation_lamar", "antsneighborhoodcorrelation_lamar_robust", 
+        "antsneighborhoodcorrelation_ants", "antsneighborhoodcorrelation_ants_default",
+        "antsneighborhoodcorrelation_ants_medium", "antsneighborhoodcorrelation_fsl", 
+        "antsneighborhoodcorrelation_easyreg",
+        "mind_lamar", "mind_lamar_robust", "mind_ants", "mind_ants_default", 
+        "mind_ants_medium", "mind_fsl", "mind_easyreg",
+        "ngf_lamar", "ngf_lamar_robust", "ngf_ants", "ngf_ants_default", 
+        "ngf_ants_medium", "ngf_fsl", "ngf_easyreg",
+        "mind_descriptors_dir"
     ]
 
     # Create CSV file with headers if it doesn't exist
-    file_exists = os.path.isfile(results_csv)
-    if not file_exists:
+    if not os.path.isfile(results_csv):
         with open(results_csv, "w", newline="") as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
+            print(f"Created new results CSV at {results_csv}")
+
+    # Read existing CSV data to determine which subjects/sessions have already been processed
+    processed_sessions = set()
+    if os.path.isfile(results_csv):
+        try:
+            with open(results_csv, 'r', newline='') as csvfile:
+                reader = csv.DictReader(csvfile)
+                for row in reader:
+                    subject_id = row.get('subject_id')
+                    session_id = row.get('session_id')
+                    if subject_id and session_id:
+                        processed_sessions.add(f"{subject_id}_{session_id}")
+            print(f"Found {len(processed_sessions)} previously processed sessions in CSV")
+        except Exception as e:
+            print(f"Warning: Error reading existing CSV file: {e}")
 
     # At the top level, add a counter to force GC every few subjects
     subject_count = 0
@@ -277,6 +305,11 @@ def main():
                     continue
 
                 print(f"  Processing session: {session_folder}")
+
+                # Skip already processed sessions
+                if f"{subject_folder}_{session_folder}" in processed_sessions and not args.force:
+                    print(f"    Session {session_folder} already processed, skipping")
+                    continue
 
                 # Find T1w and DWI scans
                 t1w_file = None
@@ -318,105 +351,160 @@ def main():
                     ants_output = os.path.join(subj_output_dir, "direct_ants_registered.nii.gz")
                     ants_default_output = os.path.join(subj_output_dir, "direct_ants_default_registered.nii.gz")
                     ants_medium_output = os.path.join(subj_output_dir, "direct_ants_medium_registered.nii.gz")
-                    fsl_output = os.path.join(subj_output_dir, "fsl_registered.nii.gz")  # Add FSL output path
+                    fsl_output = os.path.join(subj_output_dir, "fsl_registered.nii.gz")
+                    easyreg_output = os.path.join(subj_output_dir, "easyreg_registered.nii.gz")
                     
-                    # Run LaMAR registration (DWI to T1w) if needed
-                    print("    Running LaMAR registration...")
-                    lamar_time, lamar_output = run_lamar_registration(
-                        moving_img=dwi_file,
-                        fixed_img=t1w_file,
-                        output_dir=subj_output_dir,
-                        registration_method=args.registration_method,
-                        threads=args.threads,
-                        verbose=not args.quiet,
-                        force=args.force,
-                    )
+                    # Initialize registration times
+                    lamar_time = 0
+                    lamar_robust_time = 0
+                    ants_time = 0
+                    ants_default_time = 0
+                    ants_medium_time = 0
+                    fsl_time = 0
+                    easyreg_time = 0
                     
-                    # Run LaMAR robust registration (DWI to T1w) if needed
-                    print("    Running LaMAR registration with robust flag...")
-                    lamar_robust_time, lamar_robust_output = run_lamar_registration_robust(
-                        moving_img=dwi_file,
-                        fixed_img=t1w_file,
-                        output_dir=subj_output_dir,
-                        registration_method=args.registration_method,
-                        threads=args.threads,
-                        verbose=not args.quiet,
-                        force=args.force,
-                    )
+                    # Skip registration if metrics-only mode is enabled
+                    if not args.metrics_only:
+                        # Run LaMAR registration (DWI to T1w) if needed
+                        print("    Running LaMAR registration...")
+                        lamar_time, lamar_output = run_lamar_registration(
+                            moving_img=dwi_file,
+                            fixed_img=t1w_file,
+                            output_dir=subj_output_dir,
+                            registration_method=args.registration_method,
+                            threads=args.threads,
+                            verbose=not args.quiet,
+                            force=args.force,
+                        )
+                        
+                        # Run LaMAR robust registration (DWI to T1w) if needed
+                        print("    Running LaMAR registration with robust flag...")
+                        lamar_robust_time, lamar_robust_output = run_lamar_registration_robust(
+                            moving_img=dwi_file,
+                            fixed_img=t1w_file,
+                            output_dir=subj_output_dir,
+                            registration_method=args.registration_method,
+                            threads=args.threads,
+                            verbose=not args.quiet,
+                            force=args.force,
+                        )
 
-                    # Run Direct ANTs registration with custom parameters if needed
-                    print("    Running ANTs registration with custom parameters...")
-                    ants_time, ants_output = run_direct_ants_registration(
-                        moving_img=dwi_file,
-                        fixed_img=t1w_file,
-                        output_dir=subj_output_dir,
-                        registration_method=args.registration_method,
-                        threads=args.threads,
-                        verbose=not args.quiet,
-                        force=args.force,
-                    )
-                    
-                    # Run Direct ANTs registration with default parameters if needed
-                    print("    Running ANTs registration with default parameters...")
-                    ants_default_time, ants_default_output = run_direct_ants_registration_default(
-                        moving_img=dwi_file,
-                        fixed_img=t1w_file,
-                        output_dir=subj_output_dir,
-                        registration_method=args.registration_method,
-                        threads=args.threads,
-                        verbose=not args.quiet,
-                        force=args.force,
-                    )
-                    
-                    # Run Direct ANTs registration with medium iterations (40,20,10) if needed
-                    print("    Running ANTs registration with medium iterations (40,20,10)...")
-                    ants_medium_time, ants_medium_output = run_direct_ants_registration_medium_iters(
-                        moving_img=dwi_file,
-                        fixed_img=t1w_file,
-                        output_dir=subj_output_dir,
-                        registration_method=args.registration_method,
-                        threads=args.threads,
-                        verbose=not args.quiet,
-                        force=args.force,
-                    )
+                        # Run Direct ANTs registration with custom parameters if needed
+                        print("    Running ANTs registration with custom parameters...")
+                        ants_time, ants_output = run_direct_ants_registration(
+                            moving_img=dwi_file,
+                            fixed_img=t1w_file,
+                            output_dir=subj_output_dir,
+                            registration_method=args.registration_method,
+                            threads=args.threads,
+                            verbose=not args.quiet,
+                            force=args.force,
+                        )
+                        
+                        # Run Direct ANTs registration with default parameters if needed
+                        print("    Running ANTs registration with default parameters...")
+                        ants_default_time, ants_default_output = run_direct_ants_registration_default(
+                            moving_img=dwi_file,
+                            fixed_img=t1w_file,
+                            output_dir=subj_output_dir,
+                            registration_method=args.registration_method,
+                            threads=args.threads,
+                            verbose=not args.quiet,
+                            force=args.force,
+                        )
+                        
+                        # Run Direct ANTs registration with medium iterations (40,20,10) if needed
+                        print("    Running ANTs registration with medium iterations (40,20,10)...")
+                        ants_medium_time, ants_medium_output = run_direct_ants_registration_medium_iters(
+                            moving_img=dwi_file,
+                            fixed_img=t1w_file,
+                            output_dir=subj_output_dir,
+                            registration_method=args.registration_method,
+                            threads=args.threads,
+                            verbose=not args.quiet,
+                            force=args.force,
+                        )
 
-                    # Run FSL registration
-                    print("    Running FSL registration with BBR...")
-                    fsl_time, fsl_output = run_fsl_registration(
-                        moving_img=dwi_file,
-                        fixed_img=t1w_file,
-                        output_dir=subj_output_dir,
-                        threads=args.threads,
-                        verbose=not args.quiet,
-                        force=args.force,
-                    )
+                        # Run FSL registration
+                        print("    Running FSL registration with BBR...")
+                        fsl_time, fsl_output = run_fsl_registration(
+                            moving_img=dwi_file,
+                            fixed_img=t1w_file,
+                            output_dir=subj_output_dir,
+                            threads=args.threads,
+                            verbose=not args.quiet,
+                            force=args.force,
+                        )
 
-                    # Check if any registration was actually performed
-                    registrations_performed = (
-                        lamar_time > 0 or
-                        lamar_robust_time > 0 or
-                        ants_time > 0 or
-                        ants_default_time > 0 or
-                        ants_medium_time > 0 or
-                        fsl_time > 0
+                        # Run EasyReg registration
+                        print("    Running FreeSurfer EasyReg registration...")
+                        easyreg_time, easyreg_output = run_easyreg_registration(
+                            moving_img=dwi_file,
+                            fixed_img=t1w_file,
+                            output_dir=subj_output_dir,
+                            threads=args.threads,
+                            verbose=not args.quiet,
+                            force=args.force,
+                        )
+
+                    else:
+                        print("    Metrics-only mode: Skipping registration steps")
+                        # Check if output files exist
+                        existing_files = []
+                        if os.path.exists(lamar_output):
+                            existing_files.append("LaMAR")
+                        if os.path.exists(lamar_robust_output):
+                            existing_files.append("LaMAR robust")
+                        if os.path.exists(ants_output):
+                            existing_files.append("ANTs")
+                        if os.path.exists(ants_default_output):
+                            existing_files.append("ANTs default")
+                        if os.path.exists(ants_medium_output):
+                            existing_files.append("ANTs medium")
+                        if os.path.exists(fsl_output):
+                            existing_files.append("FSL")
+                        if os.path.exists(easyreg_output):
+                            existing_files.append("EasyReg")
+                            
+                        if not existing_files:
+                            print("    No existing registration outputs found, skipping")
+                            continue
+                            
+                        print(f"    Found existing outputs: {', '.join(existing_files)}")
+
+                    # Check if any outputs exist for evaluation
+                    outputs_exist = (
+                        os.path.exists(lamar_output) or
+                        os.path.exists(lamar_robust_output) or
+                        os.path.exists(ants_output) or
+                        os.path.exists(ants_default_output) or
+                        os.path.exists(ants_medium_output) or
+                        os.path.exists(fsl_output) or
+                        os.path.exists(easyreg_output)
                     )
                     
-                    # Skip quality assessment if no registrations were performed
-                    if registrations_performed:
-                        # Compare registration quality for all methods
+
+                    
+                    # Skip quality assessment if no outputs exist
+                    if outputs_exist:
+                        # First check if metrics already exist in CSV
                         print("    Comparing registration quality...")
                         quality_results = compare_registration_quality(
-                            lamar_output=lamar_output,
-                            ants_output=ants_output,
+                            lamar_output=lamar_output if os.path.exists(lamar_output) else None,
+                            ants_output=ants_output if os.path.exists(ants_output) else None,
                             fixed_img=t1w_file,
-                            lamar_robust_output=lamar_robust_output,
-                            ants_default_output=ants_default_output,
-                            ants_medium_output=ants_medium_output,
-                            fsl_output=fsl_output
+                            lamar_robust_output=lamar_robust_output if os.path.exists(lamar_robust_output) else None,
+                            ants_default_output=ants_default_output if os.path.exists(ants_default_output) else None,
+                            ants_medium_output=ants_medium_output if os.path.exists(ants_medium_output) else None,
+                            fsl_output=fsl_output if os.path.exists(fsl_output) else None,
+                            easyreg_output=easyreg_output if os.path.exists(easyreg_output) else None,
+                            subject_id=subject_folder,
+                            session_id=session_folder,
+                            results_csv=results_csv
                         )
                     else:
-                        print("    No new registrations performed, skipping quality assessment")
-                        quality_results = None
+                        print("    No registration outputs exist, skipping quality assessment")
+                        continue
 
                     # Initialize empty metrics if no quality results
                     if not quality_results:
@@ -435,36 +523,53 @@ def main():
                     row_data = {
                         "subject_id": subject_folder,
                         "session_id": session_folder,
-                        "lamar_time": f"{lamar_time:.2f}",
-                        "lamar_robust_time": f"{lamar_robust_time:.2f}",
-                        "ants_time": f"{ants_time:.2f}",
-                        "ants_default_time": f"{ants_default_time:.2f}",
-                        "ants_medium_time": f"{ants_medium_time:.2f}",
-                        "fsl_time": f"{fsl_time:.2f}",
+                        "lamar_time": f"{lamar_time:.2f}" if not args.metrics_only else "N/A",
+                        "lamar_robust_time": f"{lamar_robust_time:.2f}" if not args.metrics_only else "N/A",
+                        "ants_time": f"{ants_time:.2f}" if not args.metrics_only else "N/A",
+                        "ants_default_time": f"{ants_default_time:.2f}" if not args.metrics_only else "N/A",
+                        "ants_medium_time": f"{ants_medium_time:.2f}" if not args.metrics_only else "N/A",
+                        "fsl_time": f"{fsl_time:.2f}" if not args.metrics_only else "N/A",
+                        "easyreg_time": f"{easyreg_time:.2f}" if not args.metrics_only else "N/A",
+                        
+                        # Speedup metrics are N/A in metrics-only mode
+                        "speedup_lamar_vs_ants": f"{ants_time/lamar_time:.2f}" if not args.metrics_only and lamar_time > 0 and ants_time > 0 else "N/A",
+                        "speedup_robust_vs_ants": f"{ants_time/lamar_robust_time:.2f}" if not args.metrics_only and lamar_robust_time > 0 and ants_time > 0 else "N/A",
+                        "speedup_lamar_vs_ants_default": f"{ants_default_time/lamar_time:.2f}" if not args.metrics_only and lamar_time > 0 and ants_default_time > 0 else "N/A",
+                        "speedup_robust_vs_ants_default": f"{ants_default_time/lamar_robust_time:.2f}" if not args.metrics_only and lamar_robust_time > 0 and ants_default_time > 0 else "N/A",
+                        "speedup_lamar_vs_ants_medium": f"{ants_medium_time/lamar_time:.2f}" if not args.metrics_only and lamar_time > 0 and ants_medium_time > 0 else "N/A",
+                        "speedup_robust_vs_ants_medium": f"{ants_medium_time/lamar_robust_time:.2f}" if not args.metrics_only and lamar_robust_time > 0 and ants_medium_time > 0 else "N/A",
+                        "speedup_lamar_vs_fsl": f"{fsl_time/lamar_time:.2f}" if not args.metrics_only and lamar_time > 0 and fsl_time > 0 else "N/A",
+                        "speedup_robust_vs_fsl": f"{fsl_time/lamar_robust_time:.2f}" if not args.metrics_only and lamar_robust_time > 0 and fsl_time > 0 else "N/A",
+                        "speedup_lamar_vs_easyreg": f"{easyreg_time/lamar_time:.2f}" if not args.metrics_only and lamar_time > 0 and easyreg_time > 0 else "N/A",
+                        "speedup_robust_vs_easyreg": f"{easyreg_time/lamar_robust_time:.2f}" if not args.metrics_only and lamar_robust_time > 0 and easyreg_time > 0 else "N/A",
                         "mi_lamar": f"{mi.get('lamar', 'N/A')}" if mi else "N/A",
                         "mi_lamar_robust": f"{mi.get('lamar_robust', 'N/A')}" if mi else "N/A",
                         "mi_ants": f"{mi.get('ants', 'N/A')}" if mi else "N/A",
                         "mi_ants_default": f"{mi.get('ants_default', 'N/A')}" if mi else "N/A",
                         "mi_ants_medium": f"{mi.get('ants_medium', 'N/A')}" if mi else "N/A",
                         "mi_fsl": f"{mi.get('fsl', 'N/A')}" if mi else "N/A",
+                        "mi_easyreg": f"{mi.get('easyreg', 'N/A')}" if mi else "N/A",  # Add this
                         "antsneighborhoodcorrelation_lamar": f"{antsneighborhoodcorrelation.get('lamar', 'N/A')}" if antsneighborhoodcorrelation else "N/A",
                         "antsneighborhoodcorrelation_lamar_robust": f"{antsneighborhoodcorrelation.get('lamar_robust', 'N/A')}" if antsneighborhoodcorrelation else "N/A",
                         "antsneighborhoodcorrelation_ants": f"{antsneighborhoodcorrelation.get('ants', 'N/A')}" if antsneighborhoodcorrelation else "N/A",
                         "antsneighborhoodcorrelation_ants_default": f"{antsneighborhoodcorrelation.get('ants_default', 'N/A')}" if antsneighborhoodcorrelation else "N/A",
                         "antsneighborhoodcorrelation_ants_medium": f"{antsneighborhoodcorrelation.get('ants_medium', 'N/A')}" if antsneighborhoodcorrelation else "N/A",
                         "antsneighborhoodcorrelation_fsl": f"{antsneighborhoodcorrelation.get('fsl', 'N/A')}" if antsneighborhoodcorrelation else "N/A",
+                        "antsneighborhoodcorrelation_easyreg": f"{antsneighborhoodcorrelation.get('easyreg', 'N/A')}" if antsneighborhoodcorrelation else "N/A",  # Add this
                         "mind_lamar": f"{mind.get('lamar', 'N/A')}" if mind else "N/A",
                         "mind_lamar_robust": f"{mind.get('lamar_robust', 'N/A')}" if mind else "N/A",
                         "mind_ants": f"{mind.get('ants', 'N/A')}" if mind else "N/A",
                         "mind_ants_default": f"{mind.get('ants_default', 'N/A')}" if mind else "N/A",
                         "mind_ants_medium": f"{mind.get('ants_medium', 'N/A')}" if mind else "N/A",
                         "mind_fsl": f"{mind.get('fsl', 'N/A')}" if mind else "N/A",
+                        "mind_easyreg": f"{mind.get('easyreg', 'N/A')}" if mind else "N/A",  # Add this
                         "ngf_lamar": f"{ngf.get('lamar', 'N/A')}" if ngf else "N/A",
                         "ngf_lamar_robust": f"{ngf.get('lamar_robust', 'N/A')}" if ngf else "N/A",
                         "ngf_ants": f"{ngf.get('ants', 'N/A')}" if ngf else "N/A",
                         "ngf_ants_default": f"{ngf.get('ants_default', 'N/A')}" if ngf else "N/A",
                         "ngf_ants_medium": f"{ngf.get('ants_medium', 'N/A')}" if ngf else "N/A",
                         "ngf_fsl": f"{ngf.get('fsl', 'N/A')}" if ngf else "N/A",
+                        "ngf_easyreg": f"{ngf.get('easyreg', 'N/A')}" if ngf else "N/A",  # Add this
                     }
 
                     # Extract and save MIND descriptors if requested
@@ -475,6 +580,11 @@ def main():
                             lamar_output=lamar_output,
                             ants_output=ants_output,
                             output_dir=subj_output_dir,
+                            lamar_robust_output=lamar_robust_output,
+                            ants_default_output=ants_default_output,
+                            ants_medium_output=ants_medium_output,
+                            fsl_output=fsl_output,
+                            easyreg_output=easyreg_output  # Add this
                         )
                         row_data["mind_descriptors_dir"] = mind_dir
 
@@ -484,16 +594,28 @@ def main():
                         writer.writerow(row_data)
 
                     # Update print statements
+                    print(f"    Completed registration for {subject_folder}_{session_folder}")
+                    print(f"    Times: LaMAR: {lamar_time:.2f}s, LaMAR robust: {lamar_robust_time:.2f}s, "
+                          f"ANTs: {ants_time:.2f}s, ANTs default: {ants_default_time:.2f}s, "
+                          f"ANTs medium: {ants_medium_time:.2f}s, FSL: {fsl_time:.2f}s, "
+                          f"EasyReg: {easyreg_time:.2f}s")  # Add EasyReg time
+                    
                     print(f"    Quality metrics:")
-                    print(f"      MI (LaMAR: {mi.get('lamar', 'N/A')}, LaMAR robust: {mi.get('lamar_robust', 'N/A')}, ANTs: {mi.get('ants', 'N/A')}, ANTs default: {mi.get('ants_default', 'N/A')}, ANTs medium: {mi.get('ants_medium', 'N/A')}, FSL: {mi.get('fsl', 'N/A')})")
-                    print(f"      antsneighborhoodcorrelation (LaMAR: {antsneighborhoodcorrelation.get('lamar', 'N/A')}, LaMAR robust: {antsneighborhoodcorrelation.get('lamar_robust', 'N/A')}, ANTs: {antsneighborhoodcorrelation.get('ants', 'N/A')}, ANTs default: {antsneighborhoodcorrelation.get('ants_default', 'N/A')}, ANTs medium: {antsneighborhoodcorrelation.get('ants_medium', 'N/A')}, FSL: {antsneighborhoodcorrelation.get('fsl', 'N/A')})")
-                    print(f"      MIND (LaMAR: {mind.get('lamar', 'N/A')}, LaMAR robust: {mind.get('lamar_robust', 'N/A')}, ANTs: {mind.get('ants', 'N/A')}, ANTs default: {mind.get('ants_default', 'N/A')}, ANTs medium: {mind.get('ants_medium', 'N/A')}, FSL: {mind.get('fsl', 'N/A')})")
-                    print(f"      NGF (LaMAR: {ngf.get('lamar', 'N/A')}, LaMAR robust: {ngf.get('lamar_robust', 'N/A')}, ANTs: {ngf.get('ants', 'N/A')}, ANTs default: {ngf.get('ants_default', 'N/A')}, ANTs medium: {ngf.get('ants_medium', 'N/A')}, FSL: {ngf.get('fsl', 'N/A')})")
+                    print(f"      MI (LaMAR: {mi.get('lamar', 'N/A')}, LaMAR robust: {mi.get('lamar_robust', 'N/A')}, "
+                          f"ANTs: {mi.get('ants', 'N/A')}, ANTs default: {mi.get('ants_default', 'N/A')}, "
+                          f"ANTs medium: {mi.get('ants_medium', 'N/A')}, FSL: {mi.get('fsl', 'N/A')}, "
+                          f"EasyReg: {mi.get('easyreg', 'N/A')})")  # Add EasyReg MI
+                    
+                    print(f"      antsneighborhoodcorrelation (LaMAR: {antsneighborhoodcorrelation.get('lamar', 'N/A')}, LaMAR robust: {antsneighborhoodcorrelation.get('lamar_robust', 'N/A')}, ANTs: {antsneighborhoodcorrelation.get('ants', 'N/A')}, ANTs default: {antsneighborhoodcorrelation.get('ants_default', 'N/A')}, ANTs medium: {antsneighborhoodcorrelation.get('ants_medium', 'N/A')}, FSL: {antsneighborhoodcorrelation.get('fsl', 'N/A')}, EasyReg: {antsneighborhoodcorrelation.get('easyreg', 'N/A')})")
+                    print(f"      MIND (LaMAR: {mind.get('lamar', 'N/A')}, LaMAR robust: {mind.get('lamar_robust', 'N/A')}, ANTs: {mind.get('ants', 'N/A')}, ANTs default: {mind.get('ants_default', 'N/A')}, ANTs medium: {mind.get('ants_medium', 'N/A')}, FSL: {mind.get('fsl', 'N/A')}, EasyReg: {mind.get('easyreg', 'N/A')})")
+                    print(f"      NGF (LaMAR: {ngf.get('lamar', 'N/A')}, LaMAR robust: {ngf.get('lamar_robust', 'N/A')}, ANTs: {ngf.get('ants', 'N/A')}, ANTs default: {ngf.get('ants_default', 'N/A')}, ANTs medium: {ngf.get('ants_medium', 'N/A')}, FSL: {ngf.get('fsl', 'N/A')}, EasyReg: {ngf.get('easyreg', 'N/A')})")
                     
                     print(f"    Completed registration for {subject_folder}_{session_folder}")
-                    print(f"    Times: LaMAR: {lamar_time:.2f}s, LaMAR robust: {lamar_robust_time:.2f}s, ANTs: {ants_time:.2f}s, ANTs default: {ants_default_time:.2f}s, ANTs medium: {ants_medium_time:.2f}s, FSL: {fsl_time:.2f}s")
-                    print(f"    Results appended to {results_csv}")
-                    
+                    print(f"    Times: LaMAR: {lamar_time:.2f}s, LaMAR robust: {lamar_robust_time:.2f}s, "
+                          f"ANTs: {ants_time:.2f}s, ANTs default: {ants_default_time:.2f}s, "
+                          f"ANTs medium: {ants_medium_time:.2f}s, FSL: {fsl_time:.2f}s, "
+                          f"EasyReg: {easyreg_time:.2f}s")  # Add EasyReg time
+
                     # Free up memory
                     if 'quality_results' in locals():
                         del quality_results
