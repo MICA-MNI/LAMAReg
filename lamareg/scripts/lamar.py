@@ -41,7 +41,7 @@ def lamareg(
     skip_fixed_parc=False,
     skip_moving_parc=False,
     skip_qc=False,
-    robust=False,
+    disable_robust=False,
 ):
     """
     Perform contrast-agnostic registration using SynthSeg parcellation.
@@ -274,7 +274,7 @@ def lamareg(
                 cmd.extend(["--inverse-affine-file", inverse_affine_file])  # Standardized name
 
             subprocess.run(cmd, check=True, env=env)
-            if robust:
+            if not disable_robust:
                 print(
                     "\n--- Step 2.1: Running robust registration for improved accuracy ---"
                 )
@@ -353,7 +353,7 @@ def lamareg(
                     )
 
         # WORKFLOW 1 & 3: Apply transformation to the original input image
-        if not robust:
+        if disable_robust:
             if not generate_warpfield and output_image is not None:
                 print(
                     "\n--- Step 4: Applying transformation to original input image ---"
