@@ -22,7 +22,7 @@ matplotlib
 mdurl
 namex
 nibabel
-numpy
+numpy<2
 opt_einsum
 optree
 packaging

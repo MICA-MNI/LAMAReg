@@ -54,6 +54,7 @@ import nibabel as nib
 import numpy as np
 import tempfile
 
+
 init()
 
 # Get number of available CPU cores
@@ -288,6 +289,7 @@ def ants_linear_nonlinear_registration(
     if initial_transform == []:
         initial_transform = None
 
+
     # Pass all arguments to ants.registration, including any extra kwargs
     transforms = ants.registration(
         fixed=fixed,
@@ -320,7 +322,7 @@ def ants_linear_nonlinear_registration(
         else:
             shutil.copyfile(transforms["fwdtransforms"][0], warp_file)
             print(f"Saved warp field as {warp_file}")
-        
+
     if affine_file:
         if initial_affine_file:
             shutil.copyfile(transforms["fwdtransforms"][2], affine_file)
@@ -340,7 +342,7 @@ def ants_linear_nonlinear_registration(
     if rev_affine_file:
         shutil.copyfile(transforms["invtransforms"][0], rev_affine_file)
         print(f"Saved reverse affine transform as {rev_affine_file}")
-        
+
     print("All specified outputs saved successfully.")
     print("Cleaning up temporary files...")
     temp_files_to_delete = set(transforms['fwdtransforms'] + transforms['invtransforms'])

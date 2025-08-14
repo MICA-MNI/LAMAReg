@@ -84,7 +84,6 @@ def print_cli_help():
       {YELLOW}--skip-moving-parc{RESET}        : Toggle skipping moving image parcellation
       {YELLOW}--skip-qc{RESET}                 : Toggle skipping QC (default: False)
       {YELLOW}--disable-robust{RESET}          : Disable the two-stage robust registration (default: False)
-      
 
     {CYAN}{BOLD}────────────────── GENERATE WARPFIELD ────────────────────{RESET}
     
@@ -111,12 +110,13 @@ def print_cli_help():
       {YELLOW}--affine{RESET} dwi_to_T1w_affine.mat {YELLOW}--warpfield{RESET} dwi_to_T1w_warp.nii.gz \\
       {YELLOW}--inverse-warpfield{RESET} T1w_to_dwi_warp.nii.gz {YELLOW}--inverse-affine{RESET} T1w_to_dwi_affine.mat \\
       {YELLOW}--synthseg-threads{RESET} 4 {YELLOW}--ants-threads{RESET} 8
-
+      
     {BLUE}# Register without robust two-stage approach for challenging cases:{RESET}
     lamar {GREEN}register{RESET} {YELLOW}--moving{RESET} subject_flair.nii.gz {YELLOW}--fixed{RESET} subject_t1w.nii.gz \\
       {YELLOW}--output{RESET} registered_flair.nii.gz {YELLOW}--moving-parc{RESET} flair_parcellation.nii.gz \\
       {YELLOW}--fixed-parc{RESET} t1w_parcellation.nii.gz {YELLOW}--affine{RESET} flair_to_t1w_affine.mat \\
       {YELLOW}--warpfield{RESET} flair_to_t1w_warp.nii.gz {YELLOW}--disable-robust{RESET}
+
 
     {BLUE}# Generate parcellations separately:{RESET}
     lamar {GREEN}synthseg{RESET} {YELLOW}--i{RESET} subject_t1w.nii.gz {YELLOW}--o{RESET} t1w_parcellation.nii.gz {YELLOW}--parc{RESET}
