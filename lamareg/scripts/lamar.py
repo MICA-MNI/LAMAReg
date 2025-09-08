@@ -197,6 +197,7 @@ def lamareg(
                         input_parc,
                         "--parc",
                         "--cpu",
+                        "--robust",
                         "--threads",
                         str(synthseg_threads),  # Use SynthSeg threads
                     ],
@@ -226,6 +227,7 @@ def lamareg(
                         reference_parc,
                         "--parc",
                         "--cpu",
+                        "--robust",
                         "--threads",
                         str(synthseg_threads),  # Use SynthSeg threads
                     ],
