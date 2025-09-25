@@ -459,6 +459,7 @@ def main():
     )
     parser.add_argument("--qc-csv", help="Path for quality control Dice score CSV file")
     parser.add_argument("--skip-qc", action="store_true", help="Skip QC CSV generation")
+    parser.add_argument("--disable-robust", action="store_true", help="Disable robust second-stage registration")
     args = parser.parse_args()
 
     # Validate arguments based on workflow
@@ -495,6 +496,7 @@ def main():
         skip_fixed_parc=args.skip_fixed_parc,
         skip_moving_parc=args.skip_moving_parc,
         skip_qc=args.skip_qc,
+        disable_robust=args.disable_robust
     )
 
 
