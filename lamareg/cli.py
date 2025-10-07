@@ -332,7 +332,7 @@ def main():
     )
     apply_parser.add_argument(
         "--inverse",
-        default=False,
+        action="store_true",
         help="Whether to invert the order of the affine and warpfield (warpfield first, then affine)"
     )
     
