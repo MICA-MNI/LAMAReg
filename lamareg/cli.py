@@ -330,7 +330,12 @@ def main():
         default=DEFAULT_THREADS,
         help="Number of threads to use for ANTs transformation (default: 1)",
     )
-
+    apply_parser.add_argument(
+        "--inverse",
+        default=False,
+        help="Whether to invert the order of the affine and warpfield (warpfield first, then affine)"
+    )
+    
     # DIRECT TOOL ACCESS: SynthSeg
     synthseg_parser = subparsers.add_parser(
         "synthseg", help="Run SynthSeg brain MRI segmentation directly"
@@ -540,6 +545,7 @@ def main():
             affine_file=args.affine,
             warp_file=args.warpfield,
             ants_threads=args.ants_threads,
+            inverse=args.inverse,
             synthseg_threads=1,  # Not used in this workflow but needed for the function
         )
     elif args.command == "synthseg":
