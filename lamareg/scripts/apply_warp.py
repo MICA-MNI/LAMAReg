@@ -77,6 +77,7 @@ def print_help():
     
     {CYAN}{BOLD}────────────────────────── OPTIONAL ARGUMENTS ──────────────────────────{RESET}
       {YELLOW}--output{RESET}     : Output path for the warped image (default: warped_image.nii.gz)
+      {YELLOW}--inverse{RESET}    : Reverse the transform order (apply warpfield first, then affine)
     
     {CYAN}{BOLD}────────────────────────── EXAMPLE USAGE ──────────────────────────{RESET}
     
@@ -89,7 +90,7 @@ def print_help():
 
 
 def apply_warp(
-    moving_img, reference_img, affine_file, warp_file, out_file, interpolation="linear"
+    moving_img, reference_img, affine_file, warp_file, out_file, interpolation="linear", inverse=False
 ):
     """Apply an affine transform and a warp field to a moving image.
 
@@ -129,12 +130,20 @@ def apply_warp(
 
     # The order of transforms in transformlist matters (last Transform will be applied first).
     # Usually you put the nonlinear warp first, then the affine:
-    transformed = ants.apply_transforms(
-        fixed=reference_img,
-        moving=moving_img,
-        transformlist=[warp_file, affine_file],
-        interpolator=interpolation,
-    )
+    if inverse:
+        transformed = ants.apply_transforms(
+            fixed=reference_img,
+            moving=moving_img,
+            transformlist=[affine_file, warp_file],
+            interpolator=interpolation,
+        )
+    else:
+        transformed = ants.apply_transforms(
+            fixed=reference_img,
+            moving=moving_img,
+            transformlist=[warp_file, affine_file],
+            interpolator=interpolation,
+        )
 
     # Save the transformed image
     ants.image_write(transformed, out_file)
@@ -165,6 +174,11 @@ def main():
         default="linear",
         help="Interpolation method (default: linear).",
     )
+    parser.add_argument(
+        "--inverse",
+        default=False,
+        help="Reverse the transform order (apply warpfield first, then affine)"
+    )
     args = parser.parse_args()
 
     moving_img = ants.image_read(args.moving)
@@ -177,6 +191,7 @@ def main():
         args.warp,
         args.output,
         args.interpolation,
+        args.inverse
     )
 
 
