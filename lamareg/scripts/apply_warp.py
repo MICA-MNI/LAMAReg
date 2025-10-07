@@ -176,7 +176,7 @@ def main():
     )
     parser.add_argument(
         "--inverse",
-        default=False,
+        action="store_true",
         help="Reverse the transform order (apply warpfield first, then affine)"
     )
     args = parser.parse_args()
@@ -191,7 +191,7 @@ def main():
         args.warp,
         args.output,
         args.interpolation,
-        args.inverse
+        inverse=args.inverse
     )
 
 
