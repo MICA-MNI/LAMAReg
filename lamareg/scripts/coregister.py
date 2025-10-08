@@ -213,7 +213,7 @@ def combine_warps_and_transform(
         second_arr = second_warp_nib.get_fdata().squeeze()
 
     # Add the displacements (this combines the transforms)
-    combined_arr = first_arr + second_arr
+    composed = ants.apply_ants_transform_to_image(second_arr, first_arr)
     
     # Create and save the combined warp field
     combined_warp = nib.Nifti1Image(combined_arr, second_warp_nib.affine, second_warp_nib.header)
