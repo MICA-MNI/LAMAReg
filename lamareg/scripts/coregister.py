@@ -156,8 +156,61 @@ def combine_warps_and_transform(
     # Load warp fields
     first_warp_nib = nib.load(first_warp_path)
     second_warp_nib = nib.load(second_warp_path)
-    first_arr = first_warp_nib.get_fdata().squeeze()
-    second_arr = second_warp_nib.get_fdata().squeeze()
+    # Check if dimensions or affine transformations differ
+    dims_match = (first_warp_nib.shape == second_warp_nib.shape)
+    affine_match = np.allclose(first_warp_nib.affine, second_warp_nib.affine)
+    
+    if not (dims_match and affine_match):
+        print(f"Resampling first warp to match second warp's dimensions and affine...")
+        
+        # Extract each component (x, y, z) and resample separately
+        components = []
+        for i in range(second_warp_nib.shape[-1]):  # Use the second warp's shape
+            # Create temporary files for each component using tempfile module
+            with tempfile.NamedTemporaryFile(suffix=f"_first_comp_{i}.nii.gz", delete=False) as tmp_first:
+                first_comp_file = tmp_first.name
+            
+            with tempfile.NamedTemporaryFile(suffix=f"_second_comp_{i}.nii.gz", delete=False) as tmp_second:
+                second_comp_file = tmp_second.name
+            
+            # Save component slices to temporary files
+            first_comp_data = first_warp_nib.get_fdata()[..., i]
+            first_comp_nib = nib.Nifti1Image(first_comp_data, first_warp_nib.affine)
+            first_comp_nib.to_filename(first_comp_file)
+            
+            second_comp_data = second_warp_nib.get_fdata()[..., i]
+            second_comp_nib = nib.Nifti1Image(second_comp_data, second_warp_nib.affine)
+            second_comp_nib.to_filename(second_comp_file)
+            
+            # Read the components using ANTs
+            first_comp = ants.image_read(first_comp_file)
+            second_comp = ants.image_read(second_comp_file)
+            
+            # Resample first component to match second
+            resampled_comp = ants.resample_image_to_target(
+                first_comp, 
+                second_comp,
+                interp_type='linear'
+            )
+            
+            # Store the resampled component
+            components.append(resampled_comp.numpy())
+            
+            # Clean up temporary files
+            try:
+                os.remove(first_comp_file)
+                os.remove(second_comp_file)
+            except:
+                pass
+        
+        # Combine components into a single array
+        resampled_first_arr = np.stack(components, axis=-1)
+        first_arr = resampled_first_arr
+        second_arr = second_warp_nib.get_fdata().squeeze()
+    else:
+        # If dimensions match, just get the data
+        first_arr = first_warp_nib.get_fdata().squeeze()
+        second_arr = second_warp_nib.get_fdata().squeeze()
 
     # Add the displacements (this combines the transforms)
     combined_arr = first_arr + second_arr
