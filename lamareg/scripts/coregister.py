@@ -334,7 +334,7 @@ def ants_linear_nonlinear_registration(
             combine_warps_and_transform(
                 transforms["invtransforms"][2],
                 transforms["invtransforms"][1],
-                warp_file,)
+                rev_warp_file)
         else:
             shutil.copyfile(transforms["invtransforms"][1], rev_warp_file)
             print(f"Saved reverse warp field as {rev_warp_file}")
