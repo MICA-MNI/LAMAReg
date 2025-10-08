@@ -18,6 +18,7 @@ import argparse
 import subprocess
 import sys
 import multiprocessing
+import tempfile
 DEFAULT_THREADS = multiprocessing.cpu_count()
 
 def lamareg(
@@ -267,10 +268,21 @@ def lamareg(
                 cmd.extend(["--affine-file", affine_file])
 
             if warp_file:
-                cmd.extend(["--warp-file", warp_file])
+                if not disable_robust:
+                    with tempfile.NamedTemporaryFile(suffix=f"_tmp_warp.nii.gz", delete=False) as tmp_warp:
+                        temp_warp_file = tmp_warp.name
+                    cmd.extend(["--warp-file", temp_warp_file])
+                else:
+                    cmd.extend(["--warp-file", warp_file])
 
             if inverse_warp_file:
-                cmd.extend(["--inverse-warp-file", inverse_warp_file])  # Standardized name
+                if not disable_robust:
+                    with tempfile.NamedTemporaryFile(suffix=f"_tmp_inverse_warp.nii.gz", delete=False) as tmp_inverse_warp:
+                        tmp_inverse_warp_file = tmp_inverse_warp.name
+                    cmd.extend(["--inverse-warp-file", tmp_inverse_warp_file])
+                else:
+                    cmd.extend(["--inverse-warp-file", inverse_warp_file])
+e
 
             if inverse_affine_file:
                 cmd.extend(["--inverse-affine-file", inverse_affine_file])  # Standardized name
@@ -294,7 +306,7 @@ def lamareg(
                     "--initial-affine-file",
                     affine_file,
                     "--initial-warp-file",
-                    warp_file,
+                    temp_warp_file,
                     "--reg-iterations",
                     "10, 20",
                 ]
@@ -314,8 +326,14 @@ def lamareg(
 
                 if inverse_affine_file:
                     robust_cmd.extend(["--inverse-affine-file", inverse_affine_file])
-
+            
                 subprocess.run(robust_cmd, check=True, env=env)
+                try:
+                    os.remove(temp_warp_file)
+                    os.remove(temp_inverse_warp_file)
+                except:
+                    pass
+                    
             # Run Dice evaluation after coregistration
             if not skip_qc:
                 # If qc_csv is not provided, generate a default path based on output_parc
