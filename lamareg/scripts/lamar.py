@@ -355,7 +355,7 @@ def lamareg(
                     )
 
         # WORKFLOW 1 & 3: Apply transformation to the original input image
-        if not generate_warpfield and output_image is not None:
+        if not generate_warpfield and output_image is not None and (disable_robust or apply_warpfield):
             print(
                 "\n--- Step 4: Applying transformation to original input image ---"
             )
