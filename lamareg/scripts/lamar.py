@@ -355,42 +355,41 @@ def lamareg(
                     )
 
         # WORKFLOW 1 & 3: Apply transformation to the original input image
-        if disable_robust:
-            if not generate_warpfield and output_image is not None:
-                print(
-                    "\n--- Step 4: Applying transformation to original input image ---"
-                )
-                apply_cmd = [
-                    "lamar",
-                    "apply-warp",  # Use hyphen instead of underscore
-                    "--moving",
-                    input_image,
-                    "--fixed",  # Changed from --reference to --fixed
-                    reference_image,
-                    "--output",
-                    output_image, 
-                ]
+        if not generate_warpfield and output_image is not None:
+            print(
+                "\n--- Step 4: Applying transformation to original input image ---"
+            )
+            apply_cmd = [
+                "lamar",
+                "apply-warp",  # Use hyphen instead of underscore
+                "--moving",
+                input_image,
+                "--fixed",  # Changed from --reference to --fixed
+                reference_image,
+                "--output",
+                output_image, 
+            ]
 
-                # Only include transform file flags if files were provided
-                if affine_file:
-                    apply_cmd.extend(["--affine", affine_file])
+            # Only include transform file flags if files were provided
+            if affine_file:
+                apply_cmd.extend(["--affine", affine_file])
 
-                if warp_file:
-                    apply_cmd.extend(["--warp", warp_file])
+            if warp_file:
+                apply_cmd.extend(["--warp", warp_file])
 
-                if inverse:
-                    apply_cmd.extend(["--inverse"])
-                
-                subprocess.run(apply_cmd, check=True, env=env)
+            if inverse:
+                apply_cmd.extend(["--inverse"])
+            
+            subprocess.run(apply_cmd, check=True, env=env)
 
-                print(f"\nSuccess! Registered image saved to: {output_image}")
-            elif generate_warpfield:
-                success_msg = "\nSuccess! "
-                if warp_file:
-                    success_msg += f"Warp field generated at: {warp_file}"
-                if affine_file:
-                    success_msg += f"\nAffine transformation saved at: {affine_file}"
-                print(success_msg)
+            print(f"\nSuccess! Registered image saved to: {output_image}")
+        elif generate_warpfield:
+            success_msg = "\nSuccess! "
+            if warp_file:
+                success_msg += f"Warp field generated at: {warp_file}"
+            if affine_file:
+                success_msg += f"\nAffine transformation saved at: {affine_file}"
+            print(success_msg)
 
     except subprocess.CalledProcessError as e:
         print(f"Error during processing: {e}", file=sys.stderr)
