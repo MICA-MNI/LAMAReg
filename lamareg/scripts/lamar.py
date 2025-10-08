@@ -282,7 +282,6 @@ def lamareg(
                     cmd.extend(["--inverse-warp-file", tmp_inverse_warp_file])
                 else:
                     cmd.extend(["--inverse-warp-file", inverse_warp_file])
-e
 
             if inverse_affine_file:
                 cmd.extend(["--inverse-affine-file", inverse_affine_file])  # Standardized name
