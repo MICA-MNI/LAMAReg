@@ -34,7 +34,6 @@ def lamareg(
     affine_file=None,
     warp_file=None,
     inverse_warp_file=None,
-    inverse_affine_file=None,
     synthseg_threads=DEFAULT_THREADS,
     ants_threads=DEFAULT_THREADS,
     qc_csv=None,
@@ -97,10 +96,6 @@ def lamareg(
             print(
                 "Warning: No inverse warp field file path provided - inverse warp field will not be saved"
             )
-        if inverse_affine_file is None:
-            print(
-                "Warning: No inverse affine transform file path provided - inverse affine transform will not be saved"
-            )
     else:
         # Apply-warpfield workflow
         if input_image is None:
@@ -155,7 +150,6 @@ def lamareg(
         affine_file,
         warp_file,
         inverse_warp_file,
-        inverse_affine_file,
         qc_csv,
     ]:
         if file_path is not None:
@@ -258,10 +252,18 @@ def lamareg(
                 input_parc,
                 "--registration-method",
                 registration_method,
+                "--fixed-image",
+                reference_image,
             ]
 
             if output_parc is not None:
-                cmd.extend(["--output", output_parc])
+                if not disable_robust:
+                    with tempfile.NamedTemporaryFile(suffix=f"_tmp_output_parc.nii.gz", delete=False) as tmp_parc:
+                        temp_parc_file = tmp_parc.name
+                    cmd.extend(["--output", temp_parc_file])
+                else:
+                    cmd.extend(["--output", output_parc])
+
 
             # Only include transform file flags if paths were provided
             if affine_file:
@@ -278,13 +280,10 @@ def lamareg(
             if inverse_warp_file:
                 if not disable_robust:
                     with tempfile.NamedTemporaryFile(suffix=f"_tmp_inverse_warp.nii.gz", delete=False) as tmp_inverse_warp:
-                        tmp_inverse_warp_file = tmp_inverse_warp.name
-                    cmd.extend(["--inverse-warp-file", tmp_inverse_warp_file])
+                        temp_inverse_warp_file = tmp_inverse_warp.name
+                    cmd.extend(["--inverse-warp-file", temp_inverse_warp_file])
                 else:
                     cmd.extend(["--inverse-warp-file", inverse_warp_file])
-
-            if inverse_affine_file:
-                cmd.extend(["--inverse-affine-file", inverse_affine_file])  # Standardized name
 
             subprocess.run(cmd, check=True, env=env)
             if not disable_robust:
@@ -306,35 +305,56 @@ def lamareg(
                     affine_file,
                     "--initial-warp-file",
                     temp_warp_file,
+                    "--initial-inverse-warp-file",
+                    temp_inverse_warp_file,
                     "--reg-iterations",
-                    "10, 20",
+                    "10, 10",
                 ]
 
                 if output_image is not None:
                     robust_cmd.extend(["--output", output_image])
 
                 # Only include transform file flags if paths were provided
-                if affine_file:
+                if affine_file or not skip_qc:
                     robust_cmd.extend(["--affine-file", affine_file])
 
-                if warp_file:
+                if warp_file or not skip_qc:
                     robust_cmd.extend(["--warp-file", warp_file])
 
                 if inverse_warp_file:
                     robust_cmd.extend(["--inverse-warp-file", inverse_warp_file])
 
-                if inverse_affine_file:
-                    robust_cmd.extend(["--inverse-affine-file", inverse_affine_file])
-            
                 subprocess.run(robust_cmd, check=True, env=env)
                 try:
                     os.remove(temp_warp_file)
                     os.remove(temp_inverse_warp_file)
                 except:
                     pass
+
+                apply_cmd = [
+                    "lamar",
+                    "apply-warp",  # Use hyphen instead of underscore
+                    "--moving",
+                    input_parc,
+                    "--fixed",  # Changed from --reference to --fixed
+                    reference_image,
+                    "--output",
+                    output_parc, 
+                    "--interpolation",
+                    "nearestNeighbor",
+                ]
+
+                # Only include transform file flags if files were provided
+                apply_cmd.extend(["--affine", affine_file])
+                    
+                apply_cmd.extend(["--warp", warp_file])
+                
+                subprocess.run(apply_cmd, check=True, env=env)
                     
             # Run Dice evaluation after coregistration
             if not skip_qc:
+
+
                 # If qc_csv is not provided, generate a default path based on output_parc
                 dice_output = (
                     qc_csv
@@ -450,9 +470,6 @@ def main():
     parser.add_argument("--warpfield", required=True, help="Path for warp field")
     parser.add_argument("--inverse-warpfield", help="Path for inverse warp field")
     parser.add_argument(
-        "--inverse-affine", help="Path for inverse affine transformation"
-    )
-    parser.add_argument(
         "--generate-warpfield",
         action="store_true",
         help="Generate warp field without applying it",
@@ -510,7 +527,6 @@ def main():
         affine_file=args.affine,
         warp_file=args.warpfield,
         inverse_warp_file=args.inverse_warpfield,
-        inverse_affine_file=args.inverse_affine,
         synthseg_threads=args.synthseg_threads,
         ants_threads=args.ants_threads,
         qc_csv=args.qc_csv,

@@ -136,6 +136,7 @@ def apply_warp(
             moving=moving_img,
             transformlist=[affine_file, warp_file],
             interpolator=interpolation,
+            whichtoinvert=[True, False]
         )
     else:
         transformed = ants.apply_transforms(

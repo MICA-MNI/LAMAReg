@@ -205,10 +205,6 @@ def main():
         "--inverse-warpfield", help="Output path for inverse warp field (optional)"
     )
     register_parser.add_argument(
-        "--inverse-affine",
-        help="Output path for inverse affine transformation (optional)",
-    )
-    register_parser.add_argument(
         "--registration-method",
         default="SyNRA",
         help="Registration method (default: SyNRA)",
@@ -277,10 +273,6 @@ def main():
     )
     warpfield_parser.add_argument(
         "--inverse-warpfield", help="Output path for inverse warp field (optional)"
-    )
-    warpfield_parser.add_argument(
-        "--inverse-affine",
-        help="Output path for inverse affine transformation (optional)",
     )
     warpfield_parser.add_argument(
         "--registration-method",
@@ -444,7 +436,6 @@ def main():
                 affine_file=args.affine,
                 warp_file=args.warpfield,
                 inverse_warp_file=args.inverse_warpfield,
-                inverse_affine_file=args.inverse_affine,
                 registration_method=args.registration_method,
                 synthseg_threads=args.synthseg_threads,
                 ants_threads=args.ants_threads,
@@ -514,7 +505,6 @@ def main():
                 affine_file=args.affine,
                 warp_file=args.warpfield,
                 inverse_warp_file=args.inverse_warpfield,
-                inverse_affine_file=args.inverse_affine,
                 generate_warpfield=True,
                 registration_method=args.registration_method,
                 synthseg_threads=args.synthseg_threads,

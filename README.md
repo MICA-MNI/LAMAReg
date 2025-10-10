@@ -88,7 +88,6 @@ lamar dice-compare [options]  # Calculate Dice similarity coefficient
 - `--ants-threads N` : ANTs threads (default: 1)
 - `--qc-csv PATH` : Path for QC Dice score CSV file
 - `--inverse-warpfield PATH` : Path for inverse warp field
-- `--inverse-affine PATH` : Path for inverse affine transformation
 - `--skip-fixed-parc` : Skip fixed image parcellation if it already exists
 - `--skip-moving-parc` : Skip moving image parcellation if it already exists
 - `--skip-qc` : Skip quality control metrics calculation
@@ -170,8 +169,7 @@ lamar register --moving example_data/sub-HC001_ses-02_space-dwi_desc-b0.nii.gz -
   --output output/sub-001_dwi_in_T1w.nii.gz --moving-parc output/sub-001_dwi_parc.nii.gz \
   --fixed-parc output/sub-001_T1w_parc.nii.gz --registered-parc output/sub-001_dwi_reg_parc.nii.gz \
   --affine output/dwi_to_T1w_affine.mat --warpfield output/dwi_to_T1w_warp.nii.gz \
-  --inverse-warpfield output/T1w_to_dwi_warp.nii.gz --inverse-affine output/T1w_to_dwi_affine.mat \
-  --synthseg-threads 4 --ants-threads 8
+  --inverse-warpfield output/T1w_to_dwi_warp.nii.gz --synthseg-threads 4 --ants-threads 8
 ```
 
 ### Register without robust two-stage approach:
@@ -194,8 +192,7 @@ lamar register --moving subject_flair.nii.gz --fixed subject_t1w.nii.gz \
   --output registered_flair.nii.gz --moving-parc flair_parcellation.nii.gz \
   --fixed-parc t1w_parcellation.nii.gz --skip-fixed-parc --skip-moving-parc \
   --registered-parc registered_parcellation.nii.gz --affine flair_to_t1w_affine.mat \
-  --warpfield flair_to_t1w_warp.nii.gz --inverse-warpfield t1w_to_flair_warp.nii.gz \
-  --inverse-affine t1w_to_flair_affine.mat
+  --warpfield flair_to_t1w_warp.nii.gz --inverse-warpfield t1w_to_flair_warp.nii.gz
 ```
 
 ### Apply existing warpfield:
