@@ -355,7 +355,6 @@ def ants_linear_nonlinear_registration(
     
     # Save the registered moving image
     if out_file is not None:
-        print(transforms)
         ants.image_write(transforms['warpedmovout'], out_file)
         print(f"Registration complete. Saved registered image as {out_file}")
 
@@ -368,8 +367,6 @@ def ants_linear_nonlinear_registration(
                 transforms["fwdtransforms"][0],
                 warp_file
             )
-            shutil.copyfile(initial_warp_file, "forward_transform_1.nii.gz")
-            shutil.copyfile(transforms["fwdtransforms"][0], "forward_transform_2.nii.gz")
             print(f"Composed and saved warp field as {warp_file}")
         else:
             if fixed_image:
@@ -414,8 +411,6 @@ def ants_linear_nonlinear_registration(
                 initial_inverse_warp_file,
                 rev_warp_file
             )
-            shutil.copyfile( transforms["invtransforms"][1], "inverse_transform_1.nii.gz",)
-            shutil.copyfile( initial_inverse_warp_file, "inverse_transform_2.nii.gz",)
             print(f"Composed and saved inverse warp field as {rev_warp_file}")
         else:
             if fixed_image:
