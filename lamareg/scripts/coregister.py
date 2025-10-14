@@ -95,7 +95,6 @@ def print_help():
       {YELLOW}--warp-file{RESET}          : Path to save the forward warp field (.nii.gz)
       {YELLOW}--affine-file{RESET}        : Path to save the forward affine transform (.mat)
       {YELLOW}--inverse-warp-file{RESET}  : Path to save the reverse warp field (.nii.gz)
-      {YELLOW}--inverse-affine-file{RESET}: Path to save the reverse affine transform (.mat)
       {YELLOW}--initial-affine-file{RESET}: Path to initial affine transform to use (.mat)
       {YELLOW}--initial-warp-file{RESET}  : Path to initial warp field to use (.nii.gz)
       {YELLOW}--interpolator{RESET}       : Interpolation method (default: "genericLabel")
@@ -339,7 +338,7 @@ def ants_linear_nonlinear_registration(
             fixed=fixed,
             moving=warped_moving,
             type_of_transform=registration_method,
-            initial_transform=None,  # No initial transform for this registration
+            initial_transform='Identity',  # No initial transform for this registration
             **kwargs,
         )
     else:
@@ -393,12 +392,7 @@ def ants_linear_nonlinear_registration(
 
     # Save forward affine
     if affine_file:
-        if initial_affine_file:
-            # The new affine is at index 1, compose it with initial affine
-            # Note: ANTs composition happens automatically when applying transforms
-            shutil.copyfile(transforms["fwdtransforms"][1], affine_file)
-            print(f"Saved affine transform as {affine_file}")
-        else:
+        if not initial_affine_file:
             shutil.copyfile(transforms["fwdtransforms"][1], affine_file)
             print(f"Saved affine transform as {affine_file}")
     

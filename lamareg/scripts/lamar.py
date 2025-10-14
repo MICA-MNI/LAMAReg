@@ -359,7 +359,7 @@ def lamareg(
                 dice_output = (
                     qc_csv
                     if qc_csv
-                    else os.path.splitext(output_parc)[0] + "_dice_scores.csv"
+                    else output_parc.split('.')[0] + "_dice_scores.csv"
                 )
 
                 print(

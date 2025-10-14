@@ -86,7 +86,6 @@ def test_full_pipeline(quick=False):
     affine_file = os.path.join(output_dir, "dwi_to_T1w_affine.mat")
     warp_file = os.path.join(output_dir, "dwi_to_T1w_warp.nii.gz")
     inverse_warp = os.path.join(output_dir, "T1w_to_dwi_warp.nii.gz")
-    inverse_affine = os.path.join(output_dir, "T1w_to_dwi_affine.mat")
     qc_csv = os.path.join(output_dir, "dice_scores.csv")
 
     # Clean previous outputs
@@ -98,7 +97,6 @@ def test_full_pipeline(quick=False):
         affine_file,
         warp_file,
         inverse_warp,
-        inverse_affine,
         qc_csv,
     ]:
         if os.path.exists(f):
@@ -129,8 +127,6 @@ def test_full_pipeline(quick=False):
         warp_file,
         "--inverse-warpfield",
         inverse_warp,
-        "--inverse-affine",
-        inverse_affine,
         "--qc-csv",
         qc_csv,
         "--synthseg-threads",
@@ -165,7 +161,6 @@ def test_full_pipeline(quick=False):
             affine_file,
             warp_file,
             inverse_warp,
-            inverse_affine,
         ]
 
         missing_files = []
