@@ -74,16 +74,17 @@ def print_cli_help():
       {YELLOW}--warpfield{RESET} PATH      : Path for warp field
       
     {BLUE}# Optional Arguments:{RESET}
-      {YELLOW}--registration-method{RESET} STR : Registration method (default: SyNRA)
-      {YELLOW}--synthseg-threads{RESET} N      : SynthSeg threads (default: 1)
-      {YELLOW}--ants-threads{RESET} N          : ANTs threads (default: 1)
-      {YELLOW}--qc-csv{RESET} PATH             : Path for QC Dice score CSV file
-      {YELLOW}--inverse-warpfield{RESET} PATH  : Path for inverse warp field
-      {YELLOW}--inverse-affine{RESET} PATH     : Path for inverse affine transformation
-      {YELLOW}--skip-fixed-parc{RESET}         : Toggle skipping fixed image parcellation
-      {YELLOW}--skip-moving-parc{RESET}        : Toggle skipping moving image parcellation
-      {YELLOW}--skip-qc{RESET}                 : Toggle skipping QC (default: False)
-      {YELLOW}--disable-robust{RESET}          : Disable the two-stage robust registration (default: False)
+      {YELLOW}--registration-method{RESET} STR       : Registration method (default: SyNRA)
+      {YELLOW}--synthseg-threads{RESET} N            : SynthSeg threads (default: all cores)
+      {YELLOW}--ants-threads{RESET} N                : ANTs threads (default: all cores)
+      {YELLOW}--qc-csv{RESET} PATH                   : Path for QC Dice score CSV file
+      {YELLOW}--inverse-warpfield{RESET} PATH        : Path for inverse warp field
+      {YELLOW}--skip-fixed-parc{RESET}               : Skip fixed image parcellation
+      {YELLOW}--skip-moving-parc{RESET}              : Skip moving image parcellation
+      {YELLOW}--skip-qc{RESET}                       : Skip quality control (default: False)
+      {YELLOW}--disable-robust{RESET}                : Disable two-stage registration (default: False)
+      {YELLOW}--secondary-warpfield{RESET} PATH      : Path for secondary warp (robust mode)
+      {YELLOW}--inverse-secondary-warpfield{RESET} PATH : Path for inverse secondary warp
 
     {CYAN}{BOLD}────────────────── GENERATE WARPFIELD ────────────────────{RESET}
     
@@ -99,44 +100,99 @@ def print_cli_help():
       {YELLOW}--affine{RESET} PATH      : Path to affine transformation
       
     {BLUE}# Optional Arguments:{RESET}
-      {YELLOW}--ants-threads{RESET} N   : ANTs threads (default: 1)
+      {YELLOW}--ants-threads{RESET} N         : ANTs threads (default: all cores)
+      {YELLOW}--secondary-warpfield{RESET} PATH : Path to secondary warp (for robust mode)
+      {YELLOW}--inverse{RESET}                 : Invert transform order (warp then affine)
 
     {CYAN}{BOLD}─────────────────── EXAMPLE USAGE ───────────────────────{RESET}
 
-    {BLUE}# Register DWI to T1w:{RESET}
-    lamar {YELLOW}--moving{RESET} sub-001_dwi.nii.gz {YELLOW}--fixed{RESET} sub-001_T1w.nii.gz \\
-      {YELLOW}--output{RESET} sub-001_dwi_in_T1w.nii.gz {YELLOW}--moving-parc{RESET} sub-001_dwi_parc.nii.gz \\
-      {YELLOW}--fixed-parc{RESET} sub-001_T1w_parc.nii.gz {YELLOW}--registered-parc{RESET} sub-001_dwi_reg_parc.nii.gz \\
-      {YELLOW}--affine{RESET} dwi_to_T1w_affine.mat {YELLOW}--warpfield{RESET} dwi_to_T1w_warp.nii.gz \\
-      {YELLOW}--inverse-warpfield{RESET} T1w_to_dwi_warp.nii.gz {YELLOW}--inverse-affine{RESET} T1w_to_dwi_affine.mat \\
+    {BLUE}# Basic registration (two-stage robust mode, default):{RESET}
+    lamar {GREEN}register{RESET} \\
+      {YELLOW}--moving{RESET} sub-001_dwi.nii.gz \\
+      {YELLOW}--fixed{RESET} sub-001_T1w.nii.gz \\
+      {YELLOW}--output{RESET} sub-001_dwi_in_T1w.nii.gz \\
+      {YELLOW}--moving-parc{RESET} sub-001_dwi_parc.nii.gz \\
+      {YELLOW}--fixed-parc{RESET} sub-001_T1w_parc.nii.gz \\
+      {YELLOW}--registered-parc{RESET} sub-001_dwi_reg_parc.nii.gz \\
+      {YELLOW}--affine{RESET} dwi_to_T1w_affine.mat \\
+      {YELLOW}--warpfield{RESET} dwi_to_T1w_warp.nii.gz \\
+      {YELLOW}--secondary-warpfield{RESET} dwi_to_T1w_secondary_warp.nii.gz \\
+      {YELLOW}--inverse-warpfield{RESET} T1w_to_dwi_warp.nii.gz \\
+      {YELLOW}--inverse-secondary-warpfield{RESET} T1w_to_dwi_secondary_warp.nii.gz \\
       {YELLOW}--synthseg-threads{RESET} 4 {YELLOW}--ants-threads{RESET} 8
       
-    {BLUE}# Register without robust two-stage approach for challenging cases:{RESET}
-    lamar {GREEN}register{RESET} {YELLOW}--moving{RESET} subject_flair.nii.gz {YELLOW}--fixed{RESET} subject_t1w.nii.gz \\
-      {YELLOW}--output{RESET} registered_flair.nii.gz {YELLOW}--moving-parc{RESET} flair_parcellation.nii.gz \\
-      {YELLOW}--fixed-parc{RESET} t1w_parcellation.nii.gz {YELLOW}--affine{RESET} flair_to_t1w_affine.mat \\
-      {YELLOW}--warpfield{RESET} flair_to_t1w_warp.nii.gz {YELLOW}--disable-robust{RESET}
-
+    {BLUE}# Single-stage registration (faster, less accurate):{RESET}
+    lamar {GREEN}register{RESET} \\
+      {YELLOW}--moving{RESET} subject_flair.nii.gz \\
+      {YELLOW}--fixed{RESET} subject_t1w.nii.gz \\
+      {YELLOW}--output{RESET} registered_flair.nii.gz \\
+      {YELLOW}--moving-parc{RESET} flair_parcellation.nii.gz \\
+      {YELLOW}--fixed-parc{RESET} t1w_parcellation.nii.gz \\
+      {YELLOW}--registered-parc{RESET} flair_reg_parc.nii.gz \\
+      {YELLOW}--affine{RESET} flair_to_t1w_affine.mat \\
+      {YELLOW}--warpfield{RESET} flair_to_t1w_warp.nii.gz \\
+      {YELLOW}--disable-robust{RESET}
 
     {BLUE}# Generate parcellations separately:{RESET}
     lamar {GREEN}synthseg{RESET} {YELLOW}--i{RESET} subject_t1w.nii.gz {YELLOW}--o{RESET} t1w_parcellation.nii.gz {YELLOW}--parc{RESET}
     lamar {GREEN}synthseg{RESET} {YELLOW}--i{RESET} subject_flair.nii.gz {YELLOW}--o{RESET} flair_parcellation.nii.gz {YELLOW}--parc{RESET}
 
     {BLUE}# Register using existing parcellations:{RESET}
-    lamar {GREEN}register{RESET} {YELLOW}--moving{RESET} subject_flair.nii.gz {YELLOW}--fixed{RESET} subject_t1w.nii.gz \\
-      {YELLOW}--output{RESET} registered_flair.nii.gz {YELLOW}--moving-parc{RESET} flair_parcellation.nii.gz \\
-      {YELLOW}--fixed-parc{RESET} t1w_parcellation.nii.gz {YELLOW}--skip-fixed-parc{RESET} {YELLOW}--skip-moving-parc{RESET} \\
-      {YELLOW}--affine{RESET} flair_to_t1w_affine.mat {YELLOW}--warpfield{RESET} flair_to_t1w_warp.nii.gz
+    lamar {GREEN}register{RESET} \\
+      {YELLOW}--moving{RESET} subject_flair.nii.gz \\
+      {YELLOW}--fixed{RESET} subject_t1w.nii.gz \\
+      {YELLOW}--output{RESET} registered_flair.nii.gz \\
+      {YELLOW}--moving-parc{RESET} flair_parcellation.nii.gz \\
+      {YELLOW}--fixed-parc{RESET} t1w_parcellation.nii.gz \\
+      {YELLOW}--skip-fixed-parc{RESET} {YELLOW}--skip-moving-parc{RESET} \\
+      {YELLOW}--affine{RESET} flair_to_t1w_affine.mat \\
+      {YELLOW}--warpfield{RESET} flair_to_t1w_warp.nii.gz
+
+    {BLUE}# Apply existing transforms (robust mode with two warpfields):{RESET}
+    lamar {GREEN}apply-warpfield{RESET} \\
+      {YELLOW}--moving{RESET} dwi_segmentation.nii.gz \\
+      {YELLOW}--fixed{RESET} T1w_reference.nii.gz \\
+      {YELLOW}--output{RESET} dwi_seg_in_T1w.nii.gz \\
+      {YELLOW}--warpfield{RESET} dwi_to_T1w_warp.nii.gz \\
+      {YELLOW}--secondary-warpfield{RESET} dwi_to_T1w_secondary_warp.nii.gz \\
+      {YELLOW}--affine{RESET} dwi_to_T1w_affine.mat
 
     {CYAN}{BOLD}────────────────────────── NOTES ───────────────────────{RESET}
+    
     {MAGENTA}•{RESET} LAMAR works with any MRI modality combination
     {MAGENTA}•{RESET} If parcellation files already exist, they will be used directly
     {MAGENTA}•{RESET} All output files need explicit paths to ensure deterministic behavior
     {MAGENTA}•{RESET} The transforms can be reused with the apply-warpfield command
     {MAGENTA}•{RESET} Use dice-compare to evaluate registration quality
-    {MAGENTA}•{RESET} The robust mode performs a two-stage registration for improved accuracy:
-      1. Register parcellations (contrast-agnostic)
-      2. Fine-tune with a second direct registration using the first result as initialization
+    
+    {BLUE}ROBUST MODE (default):{RESET}
+    The robust mode performs a two-stage registration for improved accuracy:
+      1. {MAGENTA}Stage 1{RESET}: Register parcellations (contrast-agnostic, coarse alignment)
+         → Produces: primary warpfield + affine
+      2. {MAGENTA}Stage 2{RESET}: Fine-tune with direct image registration using Stage 1 as initialization
+         → Produces: secondary warpfield (refinement)
+      3. {MAGENTA}Final transform{RESET}: Composition of both warpfields
+         → Total transform = primary_warp ∘ secondary_warp
+    
+    {BLUE}WARPFIELD COMPOSITION:{RESET}
+    When applying transforms, they are applied in this order:
+      moving → {MAGENTA}[secondary_warp]{RESET} → {MAGENTA}[primary_warp]{RESET} → {MAGENTA}[affine]{RESET} → fixed
+    
+    The composition formula for displacement fields A and B:
+      C(x) = A(x) + B(x + A(x))
+    where A is applied first, then B is applied to the warped coordinates.
+    
+    {BLUE}PERFORMANCE:{RESET}
+    • Default threads: Uses all available CPU cores
+    • SynthSeg is typically faster with fewer threads (1-4)
+    • ANTs registration benefits from more threads (8-16)
+    • Robust mode takes ~2x longer but provides better accuracy
+    
+    {BLUE}OUTPUT FILES:{RESET}
+    • {MAGENTA}warpfield{RESET}: Primary displacement field (mm, LPS orientation)
+    • {MAGENTA}secondary-warpfield{RESET}: Refinement displacement field (robust mode only)
+    • {MAGENTA}affine{RESET}: Linear transformation matrix (.mat file)
+    • {MAGENTA}inverse-*{RESET}: Reverse transformations (fixed → moving)
     """
     print(help_text)
 
@@ -228,6 +284,12 @@ def main():
         "--skip-qc", action="store_true", help="whether to skip QC (default: False)"
     )
     register_parser.add_argument(
+        "--secondary-warpfield", help="Output path for secondary warp field (optional)"
+    )
+    register_parser.add_argument(
+        "--inverse-secondary-warpfield", help="Output path for inverse secondary warp (optional)"
+    )
+    register_parser.add_argument(
         "--disable-robust",
         action="store_true",
         help="Whether to disable robust registration (default: False)",
@@ -273,6 +335,12 @@ def main():
     )
     warpfield_parser.add_argument(
         "--inverse-warpfield", help="Output path for inverse warp field (optional)"
+    )
+    warpfield_parser.add_argument(
+        "--secondary-warpfield", help="Output path for secondary warp field (optional)"
+    )
+    warpfield_parser.add_argument(
+        "--inverse-secondary-warpfield", help="Output path for inverse secondary warp (optional)"
     )
     warpfield_parser.add_argument(
         "--registration-method",
@@ -444,6 +512,8 @@ def main():
                 skip_qc=args.skip_qc,
                 qc_csv=args.qc_csv,
                 disable_robust=args.disable_robust,
+                secondary_warp_file=args.secondary_warpfield,
+                inverse_secondary_warp_file=args.inverse_secondary_warpfield,
             )
 
             # Clean up temporary files after successful completion
@@ -514,6 +584,8 @@ def main():
                 skip_qc=args.skip_qc,
                 qc_csv=args.qc_csv,
                 disable_robust=args.disable_robust,
+                secondary_warp_file=args.secondary_warpfield,
+                inverse_secondary_warp_file=args.inverse_secondary_warpfield
             )
 
             # Clean up temporary files after successful completion
@@ -534,6 +606,7 @@ def main():
             apply_warpfield=True,
             affine_file=args.affine,
             warp_file=args.warpfield,
+            secondary_warp_file=args.secondary_warpfield,
             ants_threads=args.ants_threads,
             inverse=args.inverse,
             synthseg_threads=1,  # Not used in this workflow but needed for the function

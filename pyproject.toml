@@ -31,7 +31,7 @@ dependencies = [
 ]
 
 [project.scripts]
-lamar = "lamareg.cli:main"
+lamareg = "lamareg.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/MICA-MNI/LAMAReg"

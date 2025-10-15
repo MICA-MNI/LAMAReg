@@ -38,7 +38,7 @@ LAMAReg offers three main workflows and direct access to individual tools:
 Parcellate both input images, register them, and apply the transformation:
 
 ```bash
-lamar register [options]
+lamareg register [options]
 ```
 
 ### 2. Generate Warpfield Only
@@ -46,7 +46,7 @@ lamar register [options]
 Create warpfields without applying them to the input image:
 
 ```bash
-lamar generate-warpfield [options]
+lamareg generate-warpfield [options]
 ```
 
 ### 3. Apply Existing Warpfield
@@ -54,7 +54,7 @@ lamar generate-warpfield [options]
 Apply previously created warpfields to an input image:
 
 ```bash
-lamar apply-warpfield [options]
+lamareg apply-warpfield [options]
 ```
 
 ### 4. Direct Tool Access
@@ -62,10 +62,10 @@ lamar apply-warpfield [options]
 Run individual components directly:
 
 ```bash
-lamar synthseg [options]      # Run SynthSeg brain parcellation
-lamar coregister [options]    # Run ANTs coregistration
-lamar apply-warp [options]    # Apply transformations
-lamar dice-compare [options]  # Calculate Dice similarity coefficient
+lamareg synthseg [options]      # Run SynthSeg brain parcellation
+lamareg coregister [options]    # Run ANTs coregistration
+lamareg apply-warp [options]    # Apply transformations
+lamareg dice-compare [options]  # Calculate Dice similarity coefficient
 ```
 
 ## Command-Line Arguments
@@ -92,6 +92,8 @@ lamar dice-compare [options]  # Calculate Dice similarity coefficient
 - `--skip-moving-parc` : Skip moving image parcellation if it already exists
 - `--skip-qc` : Skip quality control metrics calculation
 - `--disable-robust` : Disable two-stage robust registration
+- `--secondary-warpfield PATH` : Disables warpfield composition for forward warps, specifies path to save the secondary warpfield
+- `--inverse-secondary-warpfield PATH` : Disables warpfield composition for forward warps, specifies path to save the secondary inverse warpfield
 
 ### ANTs Registration Parameters
 
@@ -124,11 +126,14 @@ Same arguments as full registration, but without `--output`
 - `--moving PATH` : Input image to transform
 - `--fixed PATH` : Reference space image
 - `--output PATH` : Output registered image
-- `--warpfield PATH` : Path to warp field
-- `--affine PATH` : Path to affine transformation
+
+
 
 #### Optional Arguments:
 - `--ants-threads N` : ANTs threads (default: 1)
+- `--affine PATH` : Path to affine transformation
+- `--warpfield PATH` : Path to warp field
+- `--secondary-warpfield PATH` : Path to secondary warp field
 
 ### SynthSeg
 
@@ -148,6 +153,25 @@ Same arguments as full registration, but without `--output`
 - `--reg PATH` : Path to registered parcellation image
 - `--out PATH` : Output CSV file path
 
+
+## Transform Order and Composition
+
+### Robust Mode (Two-Stage Registration)
+
+When using robust mode (default), LAMAReg performs a two-stage registration:
+
+1. **Primary Registration**: Parcellation-based registration (contrast-agnostic, coarse alignment)
+   - Produces: `primary_warp.nii.gz` + `affine.mat`
+
+2. **Secondary Registration**: Direct image registration using Stage 1 as initialization (fine-tuning)
+   - Produces: `secondary_warp.nii.gz` (refinement)
+
+3. **Automatic Composition**: Both warpfields are automatically composed into a single transform when `--secondary-warpfield` is not specified
+   - Total transform = `primary_warp` ∘ `secondary_warp`
+
+#### Important Note:
+Warpfield composition results in some small losses in precision due to an extra interpolation step, specify a secondary warpfield path if you need highly accurate warpfields. This will **NOT** impact the quality of the registered image provided by LAMAReg, but will result in minor degradations in quality when re-using the warpfields.
+
 ## Argument Parsing Logic
 
 LAMAReg uses a subcommand-based CLI structure using the Python `argparse` library. Here's how it works:
@@ -165,7 +189,7 @@ All output files require explicit paths to ensure deterministic behavior and pre
 
 ### Register DWI to T1w using example data:
 ```bash
-lamar register --moving example_data/sub-HC001_ses-02_space-dwi_desc-b0.nii.gz --fixed example_data/sub-HC001_ses-01_T1w.nii.gz \ 
+lamareg register --moving example_data/sub-HC001_ses-02_space-dwi_desc-b0.nii.gz --fixed example_data/sub-HC001_ses-01_T1w.nii.gz \ 
   --output output/sub-001_dwi_in_T1w.nii.gz --moving-parc output/sub-001_dwi_parc.nii.gz \
   --fixed-parc output/sub-001_T1w_parc.nii.gz --registered-parc output/sub-001_dwi_reg_parc.nii.gz \
   --affine output/dwi_to_T1w_affine.mat --warpfield output/dwi_to_T1w_warp.nii.gz \
@@ -174,7 +198,7 @@ lamar register --moving example_data/sub-HC001_ses-02_space-dwi_desc-b0.nii.gz -
 
 ### Register without robust two-stage approach:
 ```bash
-lamar register --moving subject_flair.nii.gz --fixed subject_t1w.nii.gz \
+lamareg register --moving subject_flair.nii.gz --fixed subject_t1w.nii.gz \
   --output registered_flair.nii.gz --moving-parc flair_parcellation.nii.gz \
   --fixed-parc t1w_parcellation.nii.gz --affine flair_to_t1w_affine.mat \
   --warpfield flair_to_t1w_warp.nii.gz --disable-robust
@@ -182,13 +206,13 @@ lamar register --moving subject_flair.nii.gz --fixed subject_t1w.nii.gz \
 
 ### Generate parcellations separately:
 ```bash
-lamar synthseg --i subject_t1w.nii.gz --o t1w_parcellation.nii.gz --parc
-lamar synthseg --i subject_flair.nii.gz --o flair_parcellation.nii.gz --parc
+lamareg synthseg --i subject_t1w.nii.gz --o t1w_parcellation.nii.gz --parc
+lamareg synthseg --i subject_flair.nii.gz --o flair_parcellation.nii.gz --parc
 ```
 
 ### Register using existing parcellations:
 ```bash
-lamar register --moving subject_flair.nii.gz --fixed subject_t1w.nii.gz \
+lamareg register --moving subject_flair.nii.gz --fixed subject_t1w.nii.gz \
   --output registered_flair.nii.gz --moving-parc flair_parcellation.nii.gz \
   --fixed-parc t1w_parcellation.nii.gz --skip-fixed-parc --skip-moving-parc \
   --registered-parc registered_parcellation.nii.gz --affine flair_to_t1w_affine.mat \
@@ -197,14 +221,14 @@ lamar register --moving subject_flair.nii.gz --fixed subject_t1w.nii.gz \
 
 ### Apply existing warpfield:
 ```bash
-lamar apply-warpfield --moving subject_flair.nii.gz --fixed subject_t1w.nii.gz \
+lamareg apply-warpfield --moving subject_flair.nii.gz --fixed subject_t1w.nii.gz \
   --output registered_flair.nii.gz --warpfield flair_to_t1w_warp.nii.gz \
   --affine flair_to_t1w_affine.mat
 ```
 
 ### Evaluate registration quality:
 ```bash
-lamar dice-compare --ref reference_parcellation.nii.gz \
+lamareg dice-compare --ref reference_parcellation.nii.gz \
   --reg registered_parcellation.nii.gz --out dice_scores.csv
 ```
 
@@ -243,11 +267,11 @@ This two-stage approach can improve registration accuracy for cases where initia
 ## Directory Structure
 
 ```
-LAMAR/
+LAMAReg/
 ├── setup.py
 ├── requirements.txt
 ├── README.md
-├── lamar/
+├── lamareg/
 │   ├── __init__.py
 │   ├── cli.py
 │   ├── scripts/
@@ -282,7 +306,7 @@ LAMAR/
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the CC-BY-NC License.
 
 ## Contributors
 

@@ -7,7 +7,7 @@ with open("requirements.txt", "r", encoding="utf-8") as f:
     requirements = f.read().splitlines()
 
 setup(
-    name="lamar",
+    name="lamareg",
     version="1.0.0",
     author="Ian Goodall-Halliwell, Paul Bautin, Nya Yazdi, Kevin Du, Raul R. Cruces",
     author_email="gooodallhalliwell@gmail.com",
@@ -24,7 +24,7 @@ setup(
     python_requires=">=3.10",
     install_requires=requirements,
     entry_points={
-        "console_scripts": ["lamar=lamareg.cli:main"],
+        "console_scripts": ["lamareg=lamareg.cli:main"],
     },
     include_package_data=True,
 )

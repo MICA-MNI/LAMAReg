@@ -139,39 +139,197 @@ def print_help():
     """
     print(help_text)
 
-def compose_3d_fields_extrap(A, B):
+def resample_displacement_field_vectorially(warp_img, target_img, interp='bSpline'):
     """
-    Compose displacement fields with linear interpolation + extrapolation.
-    A, B: (X, Y, Z, 3) in voxel units. Returns C of same shape.
+    Resample a displacement field from warp_img space to target_img space
+    treating it as a vector field in physical mm coordinates.
+
+    Parameters
+    ----------
+    warp_img : ants.ANTsImage
+        Original displacement field (LPS mm, 3 components).
+    target_img : ants.ANTsImage
+        Target image defining the new grid.
+    interp : str
+        Interpolation type ('linear' or 'bSpline' are good choices).
+
+    Returns
+    -------
+    ants.ANTsImage
+        Displacement field resampled to target grid, in mm (LPS).
     """
+    # Get ANTs direction matrices and spacing
+    src_direction = np.array(warp_img.direction).reshape(3, 3)
+    tgt_direction = np.array(target_img.direction).reshape(3, 3)
+    src_spacing = np.array(warp_img.spacing)
+    tgt_spacing = np.array(target_img.spacing)
+    
+    # Construct affine-like matrices (direction * spacing)
+    src_affine = src_direction * src_spacing
+    tgt_affine = tgt_direction * tgt_spacing
+
+    # Get vector components
+    components = ants.split_channels(warp_img)
+    n_comp = len(components)
+    if n_comp != 3:
+        raise ValueError(f"Expected 3 components, got {n_comp}")
+
+    # Prepare target grid - resample each component as scalar
+    target_components = []
+    for i in range(n_comp):
+        resampled = ants.resample_image_to_target(
+            components[i], target_img, interp_type=interp
+        )
+        target_components.append(resampled)
+
+    # Merge back into 3-channel vector field
+    resampled_field = ants.merge_channels(target_components)
+
+    # Rotate vectors from source frame into target frame
+    R = np.dot(tgt_affine, np.linalg.inv(src_affine))
+    data = resampled_field.numpy()  # shape (X,Y,Z,3)
+
+    # Apply rotation to each vector voxel
+    X, Y, Z, _ = data.shape
+    data_flat = data.reshape(-1, 3)
+    data_rot = (data_flat @ R.T).reshape(X, Y, Z, 3)
+
+    # Create new ANTs image with rotated vectors
+    # We need to create it component by component and then merge
+    rotated_components = []
+    for i in range(3):
+        comp = ants.from_numpy(
+            data_rot[..., i],
+            origin=target_img.origin,
+            spacing=target_img.spacing,
+            direction=target_img.direction
+        )
+        rotated_components.append(comp)
+    
+    # Merge into multi-component image
+    out = ants.merge_channels(rotated_components)
+
+    return out
+
+def compose_3d_fields_extrap(A, B, interpolation_order=3):
+    """
+    Compose two 3D displacement fields A and B using high-order interpolation
+    with linear extrapolation at boundaries.
+
+    Mathematical Framework:
+    ----------------------
+    Given displacement fields A and B (both in voxel units), this function computes
+    their composition C, which represents applying transformation A first, then B.
+    
+    For a displacement field D, the induced deformation mapping is:
+        T_D(x) = x + D(x)
+    
+    The composition T = T_B ∘ T_A means:
+        T(x) = T_B(T_A(x))
+             = T_B(x + A(x))
+             = (x + A(x)) + B(x + A(x))
+    
+    The resulting displacement field C is:
+        C(x) = T(x) - x = A(x) + B(x + A(x))
+    
+    Order of Application:
+    --------------------
+    **CRITICAL**: A is applied FIRST, then B is applied to the warped coordinates.
+    
+    Example: If you want to compose transforms [initial_warp, new_warp], call:
+        compose_3d_fields_extrap(initial_warp, new_warp)
+    
+    This will apply initial_warp first, then new_warp, resulting in the full
+    transformation chain.
+
+    Implementation Details:
+    ----------------------
+    1. For each voxel x in the grid:
+       - Compute warped coordinates: x_warped = x + A(x)
+       - Interpolate B at x_warped to get B(x + A(x))
+       - Compute composed displacement: C(x) = A(x) + B(x + A(x))
+    
+    2. Interpolation uses scipy.ndimage.map_coordinates with:
+       - order=3: cubic B-spline interpolation (more accurate than linear)
+       - mode='nearest': extrapolation at boundaries
+       - prefilter=True: applies prefiltering for accurate B-spline interpolation
+    
+    3. The three vector components (x, y, z) are interpolated independently
+       and in parallel using ThreadPoolExecutor.
+
+    Parameters:
+    ----------
+    A : ndarray
+        First displacement field, shape (X, Y, Z, 3), in voxel units.
+        This transformation is applied FIRST.
+    B : ndarray
+        Second displacement field, shape (X, Y, Z, 3), in voxel units.
+        This transformation is applied SECOND to the warped coordinates.
+    interpolation_order : int, optional
+        Order of B-spline interpolation (0=nearest, 1=linear, 3=cubic, 5=quintic).
+        Default is 3 (cubic) for better accuracy.
+
+    Returns:
+    -------
+    C : ndarray
+        Composed displacement field, shape (X, Y, Z, 3), in voxel units.
+        Represents the combined transformation: apply A first, then B.
+
+    Notes:
+    -----
+    - Both A and B must be in voxel units (not mm). Use mm_to_vox_field() to
+      convert NIfTI displacement fields from mm to voxel units before composition,
+      then use vox_to_mm_field() to convert back.
+    
+    - The composition is NOT commutative: compose_3d_fields_extrap(A, B) ≠
+      compose_3d_fields_extrap(B, A) in general.
+    
+    - For transform chains [T1, T2, T3] where you want to apply T1→T2→T3,
+      you must compose pairwise:
+      C12 = compose_3d_fields_extrap(T1, T2)  # T1 then T2
+      C123 = compose_3d_fields_extrap(C12, T3)  # (T1∘T2) then T3
+    
+    - Higher interpolation orders (3 or 5) provide more accurate results than
+      linear interpolation (order=1), especially for large deformations.
+    """
+    from scipy.ndimage import map_coordinates
+    
     if A.shape != B.shape or A.shape[-1] != 3:
         raise ValueError("A and B must be (X, Y, Z, 3)")
 
     X, Y, Z, _ = A.shape
-    i = np.arange(X, dtype=np.float32)
-    j = np.arange(Y, dtype=np.float32)
-    k = np.arange(Z, dtype=np.float32)
+    i = np.arange(X, dtype=np.float64)  # Use float64 for better precision
+    j = np.arange(Y, dtype=np.float64)
+    k = np.arange(Z, dtype=np.float64)
 
-    # Base grid and warped coords
+    # Base grid and warped coords: x_warped = x + A(x)
     I, J, K = np.meshgrid(i, j, k, indexing='ij')
-    Iw = I + A[..., 0]
-    Jw = J + A[..., 1]
-    Kw = K + A[..., 2]
-    pts = np.column_stack([Iw.ravel(), Jw.ravel(), Kw.ravel()])
+    
+    # Compute warped coordinates with float64 precision
+    Iw = I + A[..., 0].astype(np.float64)
+    Jw = J + A[..., 1].astype(np.float64)
+    Kw = K + A[..., 2].astype(np.float64)
+    
+    # Stack coordinates for map_coordinates (shape: (3, X*Y*Z))
+    coords = np.stack([Iw.ravel(), Jw.ravel(), Kw.ravel()], axis=0)
 
-    C = np.empty_like(A)
+    C = np.empty_like(A, dtype=np.float32)
     
     def interpolate_component(c):
-        rgi = RegularGridInterpolator(
-            (i, j, k), B[..., c],
-            method='linear',
-            bounds_error=False,
-            fill_value=None
-        )
-        Bw = rgi(pts).reshape(X, Y, Z)
-        return c, A[..., c] + Bw
+        """Interpolate component c of B at the warped coordinates using cubic B-spline."""
+        # Use map_coordinates with cubic B-spline interpolation
+        Bw = map_coordinates(
+            B[..., c].astype(np.float64),
+            coords,
+            order=interpolation_order,  # 3 = cubic B-spline
+            mode='nearest',  # Extrapolation mode
+            prefilter=True  # Apply B-spline prefiltering for accuracy
+        ).reshape(X, Y, Z)
+        
+        # Compose: C_c(x) = A_c(x) + B_c(x + A(x))
+        return c, (A[..., c] + Bw).astype(np.float32)
     
-    # Use ThreadPoolExecutor for parallel interpolation
+    # Use ThreadPoolExecutor for parallel interpolation of the 3 components
     with ThreadPoolExecutor(max_workers=3) as executor:
         results = executor.map(interpolate_component, range(3))
     
@@ -197,10 +355,10 @@ def vox_to_mm_field(D_vox, affine):
     D_mm = np.tensordot(D_vox, M.T, axes=([3],[0]))
     return D_mm
 
-def compose_warps(warp1_path, warp2_path, out_path):
+def compose_warps(initial_warp, secondary_warp, out_path):
     # Load two vector fields (NIfTI) with last dim=3
-    A_img = nib.load(warp2_path)
-    B_img = nib.load(warp1_path)
+    A_img = nib.load(initial_warp)
+    B_img = nib.load(secondary_warp)
     A_mm = A_img.get_fdata(dtype=np.float32).squeeze()  # (X,Y,Z,3)
     B_mm = B_img.get_fdata(dtype=np.float32).squeeze()
 
@@ -259,6 +417,8 @@ def ants_linear_nonlinear_registration(
     threads=DEFAULT_THREADS,
     fixed_image=None,
     initial_inverse_warp_file=None,
+    disable_warp_composition=False,
+    disable_inverse_warp_composition=False,
     **kwargs,
 ):
     """Perform linear (rigid + affine) and nonlinear registration using ANTsPy.
@@ -293,7 +453,10 @@ def ants_linear_nonlinear_registration(
     ):
         print(Fore.RED + "Error: No outputs specified." + Style.RESET_ALL)
         sys.exit(1)
-
+    if not initial_warp_file and disable_warp_composition:
+        print("Warning: --disable-warp-composition has no effect without --initial-warp-file.")
+    if not initial_inverse_warp_file and disable_inverse_warp_composition:
+        print("Warning: --disable-inverse-warp-composition has no effect without --initial-inverse-warp-file.")
     # Set ANTs/ITK thread count in environment variables
     os.environ["ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS"] = str(threads)
     os.environ["OMP_NUM_THREADS"] = str(threads)
@@ -361,34 +524,39 @@ def ants_linear_nonlinear_registration(
     if warp_file:
         if initial_warp_file:
             # Compose the new warp with the initial warp
-            compose_warps(
-                initial_warp_file,
-                transforms["fwdtransforms"][0],
-                warp_file
-            )
-            print(f"Composed and saved warp field as {warp_file}")
-        else:
-            if fixed_image:
-                # Resample the warp field to the moving image space
-                moving_img = ants.image_read(fixed_image)
-                warp_field = ants.image_read(transforms["fwdtransforms"][0])
-                
-                components = []
-                for i in range(warp_field.components):
-                    component = ants.split_channels(warp_field)[i]
-                    resampled_comp = ants.resample_image_to_target(
-                        component, 
-                        moving_img,
-                        interp_type='linear'
-                    )
-                    components.append(resampled_comp)
-                
-                resampled_warp = ants.merge_channels(components)
-                ants.image_write(resampled_warp, warp_file)
-                print(f"Resampled and saved warp field to match moving image space as {warp_file}")
-            else:
+            if disable_warp_composition:
                 shutil.copyfile(transforms["fwdtransforms"][0], warp_file)
-                print(f"Saved warp field as {warp_file}")
+                print(f"Saved warp field as {warp_file} (composition disabled)")
+            else:
+                # Read the warp fields
+                initial_warp_img = ants.image_read(initial_warp_file)
+                secondary_warp_img = ants.image_read(transforms["fwdtransforms"][0])
+                
+                # Resample initial_warp to match secondary_warp grid
+                # Use the first component of secondary_warp as target reference image
+                target_ref = ants.split_channels(secondary_warp_img)[0]
+                resampled_warp = resample_displacement_field_vectorially(
+                    initial_warp_img, 
+                    target_ref, 
+                    interp='bSpline'  # Use linear for better stability
+                )
+                
+                # Save resampled warp temporarily
+                with tempfile.NamedTemporaryFile(suffix='.nii.gz', delete=False) as temp_resampled:
+                    temp_resampled_path = temp_resampled.name
+                    ants.image_write(resampled_warp, temp_resampled_path)
+                    temp_files_to_cleanup.append(temp_resampled_path)
+                
+                # Compose: resampled_initial_warp (A) then secondary_warp (B)
+                compose_warps(
+                    temp_resampled_path,
+                    transforms["fwdtransforms"][0],
+                    warp_file
+                )
+                print(f"Composed and saved warp field as {warp_file}")
+        else:
+            shutil.copyfile(transforms["fwdtransforms"][0], warp_file)
+            print(f"Saved warp field as {warp_file}")
 
     # Save forward affine
     if affine_file:
@@ -399,34 +567,39 @@ def ants_linear_nonlinear_registration(
     # Save inverse warp
     if rev_warp_file:
         if initial_warp_file:
-            # Compose the inverse warps
-            compose_warps(
-                transforms["invtransforms"][1],
-                initial_inverse_warp_file,
-                rev_warp_file
-            )
-            print(f"Composed and saved inverse warp field as {rev_warp_file}")
-        else:
-            if fixed_image:
-                fixed_img = ants.image_read(fixed_image)
-                warp_field = ants.image_read(transforms["invtransforms"][1])
-                
-                components = []
-                for i in range(warp_field.components):
-                    component = ants.split_channels(warp_field)[i]
-                    resampled_comp = ants.resample_image_to_target(
-                        component, 
-                        fixed_img,
-                        interp_type='linear'
-                    )
-                    components.append(resampled_comp)
-                
-                resampled_warp = ants.merge_channels(components)
-                ants.image_write(resampled_warp, rev_warp_file)
-                print(f"Resampled and saved inverse warp field to match fixed image space as {rev_warp_file}")
-            else:
+            if disable_inverse_warp_composition:
                 shutil.copyfile(transforms["invtransforms"][1], rev_warp_file)
-                print(f"Saved warp field as {rev_warp_file}")
+                print(f"Saved inverse warp field as {rev_warp_file} (composition disabled)")
+            else:
+                # Read the inverse warp fields
+                initial_inv_warp_img = ants.image_read(initial_inverse_warp_file)
+                secondary_inv_warp_img = ants.image_read(transforms["invtransforms"][1])
+                
+                # Resample initial_inverse_warp to match secondary_inverse_warp grid
+                # Use the first component of secondary_inv_warp as target reference image
+                target_ref = ants.split_channels(secondary_inv_warp_img)[0]
+                resampled_inv_warp = resample_displacement_field_vectorially(
+                    initial_inv_warp_img, 
+                    target_ref, 
+                    interp='bSpline'  # Use linear for better stability
+                )
+                
+                # Save resampled inverse warp temporarily
+                with tempfile.NamedTemporaryFile(suffix='.nii.gz', delete=False) as temp_resampled:
+                    temp_resampled_path = temp_resampled.name
+                    ants.image_write(resampled_inv_warp, temp_resampled_path)
+                    temp_files_to_cleanup.append(temp_resampled_path)
+                
+                # Compose inverse warps: secondary_inverse_warp (A) then resampled_initial_inverse_warp (B)
+                compose_warps(
+                    transforms["invtransforms"][1],
+                    temp_resampled_path,
+                    rev_warp_file
+                )
+                print(f"Composed and saved inverse warp field as {rev_warp_file}")
+        else:
+            shutil.copyfile(transforms["invtransforms"][1], rev_warp_file)
+            print(f"Saved inverse warp field as {rev_warp_file}")
     
 
 
@@ -466,6 +639,8 @@ def main():
         "--initial-affine-file", help="Initial affine transformation file path"
     )
     parser.add_argument("--initial-warp-file", help="Initial warp field file path")
+    parser.add_argument("--disable-warp-composition", action="store_true", help="Disable warp composition with initial warp")
+    parser.add_argument("--disable-inverse-warp-composition", action="store_true", help="Disable inverse warp composition with initial inverse warp")
     parser.add_argument(
         "--interpolator", help="Interpolator type", default="genericLabel"
     )
@@ -590,6 +765,8 @@ def main():
         threads=args.threads,  # Pass threads parameter
         fixed_image=args.fixed_image,
         initial_inverse_warp_file=args.initial_inverse_warp_file,
+        disable_warp_composition=args.disable_warp_composition,
+        disable_inverse_warp_composition=args.disable_inverse_warp_composition,
         **kwargs,  # Pass all the extra parameters
     )
 

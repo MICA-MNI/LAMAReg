@@ -107,7 +107,7 @@ def test_full_pipeline(quick=False):
 
     # Build the LaMAR command
     cmd = [
-        "lamar",
+        "lamareg",
         "register",
         "--moving",
         moving_file,
