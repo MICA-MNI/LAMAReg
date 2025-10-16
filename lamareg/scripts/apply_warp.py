@@ -191,7 +191,7 @@ def print_help():
 
 
 def apply_warp(
-    moving_img, reference_img, affine_file, warp_file, out_file, interpolation="linear", inverse=False, secondary_warp=None
+    moving_img, reference_img, affine_file, warp_file, out_file, interpolation="linear", inverse=False, secondary_warp=None, verbose=False
 ):
     """Apply affine and warp field transformations to a moving image.
 
@@ -342,6 +342,7 @@ def main():
         action="store_true",
         help="Apply inverse transforms (fixed → moving direction, inverts affine)"
     )
+    parser.add_argument("--verbose", action="store_true", help="Print detailed output to console")
     args = parser.parse_args()
 
     moving_img = ants.image_read(args.moving)
@@ -355,7 +356,8 @@ def main():
         args.output,
         args.interpolation,
         inverse=args.inverse,
-        secondary_warp=args.secondary_warp if hasattr(args, 'secondary_warp') else None
+        secondary_warp=args.secondary_warp if hasattr(args, 'secondary_warp') else None,
+        verbose=args.verbose
     )
 
 

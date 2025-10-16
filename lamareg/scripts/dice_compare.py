@@ -69,7 +69,7 @@ def dice_score(mask1, mask2):
         return np.nan
     return 2.0 * intersection / (size1 + size2)
 
-def compare_parcellations_dice(parc1_path, parc2_path, output_csv_path):
+def compare_parcellations_dice(parc1_path, parc2_path, output_csv_path, verbose=False):
     """
     Compare two parcellation images and calculate Dice scores for each label.
     
@@ -125,9 +125,9 @@ def compare_parcellations_dice(parc1_path, parc2_path, output_csv_path):
     # Continue with the existing code
     labels = sorted(set(np.unique(parc1)) | set(np.unique(parc2)))
     labels = [label for label in labels if label != 0]  # Exclude background
-
-    print(f"\nDice scores per label:\n{'Label':<8}{'Region':<40}{'Dice Score':<10}")
-    print("-" * 65)
+    if verbose:
+        print(f"\nDice scores per label:\n{'Label':<8}{'Region':<40}{'Dice Score':<10}")
+        print("-" * 65)
 
     with open(output_csv_path, mode='w', newline='') as csv_file:
         writer = csv.writer(csv_file)
@@ -197,9 +197,10 @@ def main():
     parser.add_argument("--ref", required=True, help="Path to reference parcellation image")
     parser.add_argument("--reg", required=True, help="Path to registered parcellation image")
     parser.add_argument("--out", required=True, help="Output CSV file path")
+    parser.add_argument("--verbose", action="store_true", help="Print detailed output to console")
     args = parser.parse_args()
 
-    compare_parcellations_dice(args.ref, args.reg, args.out)
+    compare_parcellations_dice(args.ref, args.reg, args.out, args.verbose)
 
 if __name__ == "__main__":
     main()

@@ -419,6 +419,7 @@ def ants_linear_nonlinear_registration(
     initial_inverse_warp_file=None,
     disable_warp_composition=False,
     disable_inverse_warp_composition=False,
+    verbose=False,
     **kwargs,
 ):
     """Perform linear (rigid + affine) and nonlinear registration using ANTsPy.
@@ -502,6 +503,7 @@ def ants_linear_nonlinear_registration(
             moving=warped_moving,
             type_of_transform=registration_method,
             initial_transform='Identity',  # No initial transform for this registration
+            verbose=verbose,
             **kwargs,
         )
     else:
@@ -511,6 +513,7 @@ def ants_linear_nonlinear_registration(
             moving=moving,
             type_of_transform=registration_method,
             initial_transform=None,
+            verbose=verbose,
             **kwargs,
         )
     
@@ -707,7 +710,6 @@ def main():
     parser.add_argument(
         "--random-seed", type=int, help="Random seed for reproducibility"
     )
-
     args = parser.parse_args()
 
     # Process tuple arguments from strings
@@ -767,6 +769,7 @@ def main():
         initial_inverse_warp_file=args.initial_inverse_warp_file,
         disable_warp_composition=args.disable_warp_composition,
         disable_inverse_warp_composition=args.disable_inverse_warp_composition,
+        verbose=args.verbose,
         **kwargs,  # Pass all the extra parameters
     )
 

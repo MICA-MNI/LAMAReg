@@ -43,7 +43,8 @@ def lamareg(
     disable_robust=False,
     inverse=False,
     secondary_warp_file=None,
-    inverse_secondary_warp_file=None
+    inverse_secondary_warp_file=None,
+    verbose=False
     
 ):
     """
@@ -310,6 +311,8 @@ def lamareg(
                 else:
                     cmd.extend(["--inverse-warp-file", inverse_warp_file])
 
+            if verbose:
+                cmd.append("--verbose")
             subprocess.run(cmd, check=True, env=env)
             if not disable_robust:
                 print(
@@ -358,7 +361,8 @@ def lamareg(
                         robust_cmd.extend(["--disable-inverse-warp-composition"])
                     else:
                         robust_cmd.extend(["--inverse-warp-file", inverse_warp_file])
-
+                if verbose:
+                    robust_cmd.append("--verbose")
                 subprocess.run(robust_cmd, check=True, env=env)
                 try:
                     os.remove(temp_warp_file)
@@ -378,7 +382,7 @@ def lamareg(
                     "--interpolation",
                     "nearestNeighbor",
                 ]
-
+                
                 # Only include transform file flags if files were provided
                 apply_cmd.extend(["--affine", affine_file])
                     
@@ -386,7 +390,8 @@ def lamareg(
 
                 if secondary_warp_file:
                     apply_cmd.extend(["--secondary-warp", secondary_warp_file])
-                
+                if verbose:
+                    apply_cmd.append("--verbose")
                 subprocess.run(apply_cmd, check=True, env=env)
                     
             # Run Dice evaluation after coregistration
@@ -406,7 +411,7 @@ def lamareg(
                 try:
                     from lamareg.scripts.dice_compare import compare_parcellations_dice
 
-                    compare_parcellations_dice(reference_parc, output_parc, dice_output)
+                    compare_parcellations_dice(reference_parc, output_parc, dice_output, verbose=verbose)
                     print(f"Quality control metrics saved to: {dice_output}")
                 except FileNotFoundError as e:
                     print(
@@ -457,7 +462,8 @@ def lamareg(
 
             if inverse:
                 apply_cmd.extend(["--inverse"])
-            
+            if verbose:
+                apply_cmd.append("--verbose")
             subprocess.run(apply_cmd, check=True, env=env)
 
             print(f"\nSuccess! Registered image saved to: {output_image}")
@@ -541,6 +547,7 @@ def main():
     parser.add_argument("--skip-qc", action="store_true", help="Skip QC CSV generation")
     parser.add_argument("--disable-robust", action="store_true", help="Disable robust second-stage registration")
     parser.add_argument("--inverse", action="store_true", help="Whether to reverse the order of the transforms (warpfield first, then affine)")
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
     args = parser.parse_args()
 
     # Validate arguments based on workflow
@@ -579,7 +586,8 @@ def main():
         disable_robust=args.disable_robust,
         inverse=args.inverse,
         secondary_warp_file=args.secondary_warpfield,
-        inverse_secondary_warp_file=args.inverse_secondary_warpfield
+        inverse_secondary_warp_file=args.inverse_secondary_warpfield,
+        verbose=args.verbose
     )
 
 

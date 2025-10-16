@@ -85,6 +85,7 @@ def print_cli_help():
       {YELLOW}--disable-robust{RESET}                : Disable two-stage registration (default: False)
       {YELLOW}--secondary-warpfield{RESET} PATH      : Path for secondary warp (robust mode)
       {YELLOW}--inverse-secondary-warpfield{RESET} PATH : Path for inverse secondary warp
+      {YELLOW}--verbose{RESET}                        : Enable verbose output
 
     {CYAN}{BOLD}────────────────── GENERATE WARPFIELD ────────────────────{RESET}
     
@@ -294,6 +295,11 @@ def main():
         action="store_true",
         help="Whether to disable robust registration (default: False)",
     )
+    register_parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Enable verbose output (default: False)",
+    )
 
     # WORKFLOW 2: Generate warpfield only
     warpfield_parser = subparsers.add_parser(
@@ -370,6 +376,11 @@ def main():
         action="store_true",
         help="Whether to disable robust registration (default: False)",
     )
+    warpfield_parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Enable verbose output (default: False)",
+    )
 
     # WORKFLOW 3: Apply existing warpfield
     apply_parser = subparsers.add_parser(
@@ -394,6 +405,11 @@ def main():
         "--inverse",
         action="store_true",
         help="Whether to invert the order of the affine and warpfield (warpfield first, then affine)"
+    )
+    apply_parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Enable verbose output (default: False)",
     )
     
     # DIRECT TOOL ACCESS: SynthSeg
@@ -433,6 +449,7 @@ def main():
         "--reg", help="Path to registered parcellation image"
     )
     dice_compare_parser.add_argument("--out", help="Output CSV file path")
+    dice_compare_parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
 
     # Parse known args, leaving the rest for the subcommands
     args, unknown_args = parser.parse_known_args()
@@ -514,6 +531,7 @@ def main():
                 disable_robust=args.disable_robust,
                 secondary_warp_file=args.secondary_warpfield,
                 inverse_secondary_warp_file=args.inverse_secondary_warpfield,
+                verbose=args.verbose
             )
 
             # Clean up temporary files after successful completion
@@ -585,7 +603,8 @@ def main():
                 qc_csv=args.qc_csv,
                 disable_robust=args.disable_robust,
                 secondary_warp_file=args.secondary_warpfield,
-                inverse_secondary_warp_file=args.inverse_secondary_warpfield
+                inverse_secondary_warp_file=args.inverse_secondary_warpfield,
+                verbose=args.verbose
             )
 
             # Clean up temporary files after successful completion
@@ -610,6 +629,7 @@ def main():
             ants_threads=args.ants_threads,
             inverse=args.inverse,
             synthseg_threads=1,  # Not used in this workflow but needed for the function
+            verbose=args.verbose
         )
     elif args.command == "synthseg":
         # Create a clean dictionary with the args provided by the parser
