@@ -330,12 +330,19 @@ def lamareg(
                     affine_file,
                     "--initial-warp-file",
                     temp_warp_file if not secondary_warp_file else warp_file,
-                    "--initial-inverse-warp-file",
-                    temp_inverse_warp_file if not inverse_secondary_warp_file else inverse_warp_file,
                     "--reg-iterations",
                     "10, 20",
                 ]
+                
+                if not secondary_warp_file:
+                    robust_cmd.extend(["--initial-warp-file", temp_warp_file])
+                else:
+                    robust_cmd.extend(["--initial-warp-file", warp_file])
 
+                if not inverse_secondary_warp_file:
+                    robust_cmd.extend(["--initial-inverse-warp-file", temp_inverse_warp_file])
+                else:
+                    robust_cmd.extend(["--initial-inverse-warp-file", inverse_warp_file])
                 if output_image is not None:
                     robust_cmd.extend(["--output", output_image])
 
