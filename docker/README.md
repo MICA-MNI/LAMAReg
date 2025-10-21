@@ -60,11 +60,45 @@ cd /host/cassio/export03/data/enning/lamareg_build
 # Basic help
 singularity run /path/to/lamareg_latest.sif --help
 
-# Process data (mount directories)
-singularity exec -B /path/to/data:/data /path/to/lamareg_latest.sif python -m lamareg.cli --input /data/input.nii.gz --output /data/output.nii.gz
+## 📦 What Gets Built
 
-# Interactive shell
-singularity shell -B /path/to/data:/data /path/to/lamareg_latest.sif
+- **Docker Image**: `localhost:5001/lamareg:latest` (~3.7GB)
+- **Singularity SIF**: `/host/cassio/export03/data/enning/singularity/lamareg_latest.sif` (~1.5GB compressed)
+
+## 🎯 LAMAReg Usage Examples
+
+### Basic Commands
+```bash
+# Help and version info
+singularity exec /host/cassio/export03/data/enning/singularity/lamareg_latest.sif lamareg --help
+singularity exec /host/cassio/export03/data/enning/singularity/lamareg_latest.sif lamareg register --help
+
+# Full registration pipeline
+singularity exec -B /path/to/data:/data /host/cassio/export03/data/enning/singularity/lamareg_latest.sif lamareg register \
+  --moving /data/moving.nii.gz --fixed /data/fixed.nii.gz \
+  --output /data/registered.nii.gz \
+  --moving-parc /data/moving_parc.nii.gz \
+  --fixed-parc /data/fixed_parc.nii.gz \
+  --registered-parc /data/reg_parc.nii.gz \
+  --affine /data/affine.mat \
+  --warpfield /data/warp.nii.gz
+
+# Generate brain parcellation only
+singularity exec -B /path/to/data:/data /host/cassio/export03/data/enning/singularity/lamareg_latest.sif lamareg synthseg \
+  --i /data/input.nii.gz --o /data/parcellation.nii.gz --parc
+
+# Apply existing warpfield
+singularity exec -B /path/to/data:/data /host/cassio/export03/data/enning/singularity/lamareg_latest.sif lamareg apply-warpfield \
+  --moving /data/moving.nii.gz --fixed /data/fixed.nii.gz \
+  --output /data/warped.nii.gz \
+  --warpfield /data/warp.nii.gz --affine /data/affine.mat
+```
+
+### Alternative CLI Access
+If `lamareg` command doesn't work, use:
+```bash
+singularity exec /host/cassio/export03/data/enning/singularity/lamareg_latest.sif python -m lamareg.cli --help
+```
 ```
 
 ## 📦 Docker Image Details
@@ -104,19 +138,55 @@ BUILD_DIR="$SERVER_BASE_DIR/lamareg_build"
 
 ## 🔍 Troubleshooting
 
-### Build Fails
-1. Check disk space on server
-2. Verify all required files are copied
-3. Check Docker daemon is running
+### Singularity Build Issues
+
+**"nodev" Mount Warning**
+```bash
+# Error: SINGULARITY: WARNING: 'nodev' mount option set on /host/cassio/export03
+# Solution: Script automatically detects this and uses tar method
+./diagnose_singularity.sh  # Check system status first
+./build_singularity.sh     # Will handle filesystem issues automatically
+```
+
+**Invalid Tar Header Error**
+```bash
+# Error: archive/tar: invalid tar header
+# Solution: Improved build script with robust error handling
+./build_singularity.sh     # Uses fallback methods automatically
+```
+
+**SIF File Not Created**
+```bash
+# Comprehensive diagnostics
+./diagnose_singularity.sh
+
+# Manual checks
+docker image ls | grep lamareg    # Ensure Docker image exists
+df -h /host/cassio/export03       # Check available disk space (need 10GB+)
+singularity --version             # Verify Singularity installation
+```
+
+### Docker Build Fails
+1. Check disk space on server: `df -h`
+2. Verify Docker daemon: `docker info`
+3. Check for image conflicts: `docker image ls | grep lamareg`
 4. Review build logs for specific errors
 
 ### Import Errors
 - Ensure all dependencies are in requirements.txt
 - Check if system dependencies are needed in Dockerfile
+- Verify LAMAReg module structure
 
 ### Permission Issues
-- Verify server directory is writable
+- Verify server directory is writable: `ls -la /host/cassio/export03/data/enning`
 - Check Docker daemon permissions
+- Ensure Singularity has proper access
+
+### Quick Diagnostics
+Run the diagnostic script for comprehensive system check:
+```bash
+./diagnose_singularity.sh  # Checks Docker, Singularity, filesystem, permissions
+```
 
 ## 📊 Performance Notes
 
