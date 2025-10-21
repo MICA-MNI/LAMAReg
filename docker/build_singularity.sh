@@ -1,122 +1,54 @@
 #!/bin/bash
-#
-# LAMAReg Singularity Build - Convert Docker to SIF
-# Optimized for local Docker images with server environment
-#
+set -eu
 
-set -e
-
-DOCKER_IMAGE="lamareg"
-DOCKER_TAG="${1:-latest}"
-FULL_DOCKER_IMAGE="${DOCKER_IMAGE}:${DOCKER_TAG}"
+# ============================================================================
+# LAMAReg Singularity Build Script (Robust Version)
+# ============================================================================
+# Handles filesystem issues like 'nodev' mounts and tar header problems
 
 BASE_DIR="/host/cassio/export03/data/enning"
 OUTPUT_DIR="${BASE_DIR}/singularity"
-OUTPUT_PATH="${OUTPUT_DIR}/lamareg_${DOCKER_TAG}.sif"
+OUTPUT_PATH="${OUTPUT_DIR}/lamareg_latest.sif"
+DOCKER_IMAGE="${1:-localhost:5001/lamareg:latest}"
 
-# Performance settings for server
-export SINGULARITY_CACHEDIR="${BASE_DIR}/.singularity_cache"
-export SINGULARITY_TMPDIR="${BASE_DIR}/.singularity_tmp"
-export SINGULARITY_MEMORY="32G"  # Adjust based on server RAM
-export OMP_NUM_THREADS=$(nproc)
-
-log() { echo "[$(date '+%H:%M:%S')] $*"; }
-
-# Function to check and kill stuck processes
-check_stuck_processes() {
-    log "🔍 Checking for stuck processes..."
-    
-    # Check for singularity processes
-    SING_PROCS=$(ps aux | grep singularity | grep -v grep | wc -l)
-    if [ "$SING_PROCS" -gt 0 ]; then
-        log "🔍 Found $SING_PROCS singularity processes:"
-        ps aux | grep singularity | grep -v grep
-    fi
-    
-    # Check for docker save processes  
-    DOCKER_PROCS=$(ps aux | grep "docker save" | grep -v grep | wc -l)
-    if [ "$DOCKER_PROCS" -gt 0 ]; then
-        log "🔍 Found $DOCKER_PROCS docker save processes:"
-        ps aux | grep "docker save" | grep -v grep
-    fi
-    
-    # Check temp directory usage
-    if [ -d "$SINGULARITY_TMPDIR" ]; then
-        TEMP_USAGE=$(du -sh "$SINGULARITY_TMPDIR" 2>/dev/null | cut -f1 || echo "0")
-        log "💾 Temp directory: $TEMP_USAGE"
-    fi
-    
-    # Check if output file exists and its size
-    if [ -f "$OUTPUT_PATH" ]; then
-        OUTPUT_SIZE=$(du -h "$OUTPUT_PATH" | cut -f1)
-        log "📁 Output file exists: $OUTPUT_SIZE"
-    else
-        log "❌ No output file yet"
-    fi
+# Logging function
+log() {
+    echo "[$(date '+%H:%M:%S')] $1"
 }
 
-# Function to kill all related processes
-kill_stuck_build() {
-    log "🛑 Killing stuck build processes..."
-    
-    # Kill singularity processes
-    pkill -f singularity 2>/dev/null || true
-    
-    # Kill docker save processes
-    pkill -f "docker save" 2>/dev/null || true
-    
-    # Clean up temp files
-    if [ -d "$SINGULARITY_TMPDIR" ]; then
-        rm -rf "$SINGULARITY_TMPDIR"/* 2>/dev/null || true
-    fi
-    
-    # Remove partial output
-    if [ -f "$OUTPUT_PATH" ]; then
-        rm -f "$OUTPUT_PATH"
-    fi
-    
-    log "✅ Cleanup complete"
-}
-
-# ============================================================================
-# Pre-flight checks
-# ============================================================================
-log "🚀 LAMAReg SINGULARITY BUILD"
-log "📦 Docker Image: $FULL_DOCKER_IMAGE"
+log "🚀 Starting LAMAReg Singularity Build"
+log "===================================="
 log "📍 Output: $OUTPUT_PATH"
 
-# Check local Docker image exists
-if ! docker image inspect "$FULL_DOCKER_IMAGE" &>/dev/null; then
-    log "❌ Local Docker image not found: $FULL_DOCKER_IMAGE"
-    log "   Available images:"
-    docker images | grep lamareg || echo "   No lamareg images found"
-    log ""
+# Create output directory
+mkdir -p "$OUTPUT_DIR"
+
+# Check Docker image
+if ! docker image inspect "$DOCKER_IMAGE" >/dev/null 2>&1; then
+    log "❌ Docker image not found: $DOCKER_IMAGE"
     log "💡 Build Docker image first:"
-    log "   cd /host/cassio/export03/data/enning/lamareg_build"
     log "   ./build_docker.sh"
     exit 1
 fi
 
-LOCAL_SIZE=$(docker image inspect "$FULL_DOCKER_IMAGE" --format='{{.Size}}' | awk '{printf "%.1f GB", $1/1024/1024/1024}')
-log "✅ Found local Docker image: $LOCAL_SIZE"
+DOCKER_SIZE=$(docker image inspect "$DOCKER_IMAGE" --format='{{.Size}}' | awk '{print $1/1024/1024/1024 " GB"}')
+log "✅ Found Docker image: $DOCKER_SIZE"
 
-# Check Singularity is available
+# Check Singularity
 if ! command -v singularity >/dev/null 2>&1; then
-    log "❌ Singularity not found in PATH"
-    log "   Please install Singularity or check PATH"
+    log "❌ Singularity not found"
+    log "💡 Install Singularity first"
     exit 1
 fi
 
-SING_VERSION=$(singularity --version 2>/dev/null || echo "unknown")
+SING_VERSION=$(singularity --version)
 log "✅ Singularity version: $SING_VERSION"
 
-# Create directories
-mkdir -p "$OUTPUT_DIR" "$SINGULARITY_CACHEDIR" "$SINGULARITY_TMPDIR"
-
-# Check space
-AVAILABLE=$(df -BG "$BASE_DIR" | awk 'NR==2 {print $4}' | sed 's/G//')
-if [ "$AVAILABLE" -lt 50 ]; then
-    log "❌ Need 50GB+ space, only ${AVAILABLE}GB available"
+# Check available space
+AVAILABLE=$(df "$BASE_DIR" | awk 'NR==2 {print int($4/1024/1024)}')
+if [ "$AVAILABLE" -lt 10 ]; then
+    log "❌ Insufficient space: ${AVAILABLE}GB available"
+    log "💡 Need at least 10GB free space"
     exit 1
 fi
 log "✅ Space check: ${AVAILABLE}GB available"
@@ -129,153 +61,139 @@ fi
 
 START_TIME=$(date +%s)
 
-# ============================================================================
-# Method 1: Streaming (fastest - no intermediate files) 
-# ============================================================================
-log "⚡ Trying streaming method (fastest)..."
-log "📊 Progress monitoring: watching output file size..."
-
-# Start progress monitor in background
-monitor_progress() {
-    while true; do
-        if [ -f "$OUTPUT_PATH" ]; then
-            SIZE=$(du -h "$OUTPUT_PATH" 2>/dev/null | cut -f1 || echo "0")
-            log "📈 Current size: $SIZE"
-        else
-            log "⏳ Waiting for output file to appear..."
-        fi
-        sleep 30
-    done
-}
-
-# Start monitoring
-monitor_progress &
-MONITOR_PID=$!
-
-# Run the actual build with verbose output
-log "🔄 Starting docker save | singularity build..."
-if timeout 3600 bash -c "docker save '$FULL_DOCKER_IMAGE' | singularity build --force '$OUTPUT_PATH' docker-archive:///dev/stdin" 2>&1 | while read line; do
-    log "SINGULARITY: $line"
-done; then
-    # Stop monitor
-    kill $MONITOR_PID 2>/dev/null || true
-    wait $MONITOR_PID 2>/dev/null || true
-    log "✅ Streaming method succeeded!"
-    USED_METHOD="streaming"
+# Check for filesystem issues
+MOUNT_INFO=$(mount | grep "$(dirname "$OUTPUT_PATH")" || echo "")
+if echo "$MOUNT_INFO" | grep -q nodev; then
+    log "⚠️  WARNING: 'nodev' mount detected - using tar method"
+    USE_TAR_METHOD=true
 else
-    # Stop monitor  
-    kill $MONITOR_PID 2>/dev/null || true
-    wait $MONITOR_PID 2>/dev/null || true
-    log "⚠️  Streaming failed, trying tar method..."
+    USE_TAR_METHOD=false
+fi
+
+# ============================================================================
+# Method Selection and Execution
+# ============================================================================
+
+BUILD_SUCCESS=false
+METHOD=""
+
+if [ "$USE_TAR_METHOD" = "false" ]; then
+    # Try streaming method first
+    log "⚡ Attempting streaming method..."
     
-    # ============================================================================
-    # Method 2: Tar method (more reliable)
-    # ============================================================================
+    if timeout 1800 bash -c "
+        set -o pipefail
+        docker save '$DOCKER_IMAGE' | singularity build --force --fakeroot '$OUTPUT_PATH' docker-archive:/dev/stdin
+    " 2>&1; then
+        if [[ -f "$OUTPUT_PATH" ]] && [[ -s "$OUTPUT_PATH" ]]; then
+            if singularity inspect "$OUTPUT_PATH" >/dev/null 2>&1; then
+                BUILD_SUCCESS=true
+                METHOD="streaming"
+                log "✅ Streaming method succeeded!"
+            else
+                log "❌ Invalid SIF file from streaming method"
+                rm -f "$OUTPUT_PATH" 2>/dev/null || true
+            fi
+        else
+            log "❌ Streaming method produced no output"
+        fi
+    else
+        log "❌ Streaming method failed"
+        rm -f "$OUTPUT_PATH" 2>/dev/null || true
+    fi
+fi
+
+# Fall back to tar method if streaming failed or if filesystem requires it
+if [ "$BUILD_SUCCESS" = "false" ]; then
+    log "🔧 Using tar method (more reliable for problematic filesystems)..."
+    
     TAR_FILE="${BASE_DIR}/lamareg_docker_$$.tar"
     
-    log "📤 Exporting Docker to tar..."
-    
-    # Monitor tar creation
-    (while [ ! -f "$TAR_FILE" ] || [ $(stat -f%z "$TAR_FILE" 2>/dev/null || stat -c%s "$TAR_FILE" 2>/dev/null || echo 0) -eq 0 ]; do
-        sleep 5
-        log "⏳ Waiting for tar export to start..."
-    done
-    
-    while [ -f "$TAR_FILE" ] && kill -0 $! 2>/dev/null; do
-        SIZE=$(du -h "$TAR_FILE" 2>/dev/null | cut -f1 || echo "0")
-        log "📈 Tar progress: $SIZE"
-        sleep 30
-    done) &
-    
-    TAR_MONITOR_PID=$!
-    
-    # Create tar file
-    docker save "$FULL_DOCKER_IMAGE" -o "$TAR_FILE" &
-    DOCKER_PID=$!
-    
-    # Wait for docker save to complete
-    wait $DOCKER_PID
-    
-    # Stop tar monitor
-    kill $TAR_MONITOR_PID 2>/dev/null || true
-    wait $TAR_MONITOR_PID 2>/dev/null || true
-    
-    TAR_SIZE=$(du -h "$TAR_FILE" | cut -f1)
-    log "✅ Export complete: $TAR_SIZE"
-    
-    log "🔧 Building SIF from tar..."
-    
-    # Monitor SIF creation
-    (while [ ! -f "$OUTPUT_PATH" ] || [ $(stat -f%z "$OUTPUT_PATH" 2>/dev/null || stat -c%s "$OUTPUT_PATH" 2>/dev/null || echo 0) -eq 0 ]; do
-        sleep 5
-        log "⏳ Waiting for SIF build to start..."
-    done
-    
-    while [ -f "$OUTPUT_PATH" ] && kill -0 $! 2>/dev/null; do
-        SIZE=$(du -h "$OUTPUT_PATH" 2>/dev/null | cut -f1 || echo "0")
-        log "📈 SIF progress: $SIZE"
-        sleep 30
-    done) &
-    
-    SIF_MONITOR_PID=$!
-    
-    # Build SIF
-    singularity build --force \
-        "$OUTPUT_PATH" \
-        "docker-archive://$TAR_FILE" &
-    SINGULARITY_PID=$!
-    
-    # Wait for singularity build to complete
-    wait $SINGULARITY_PID
-    
-    # Stop SIF monitor
-    kill $SIF_MONITOR_PID 2>/dev/null || true
-    wait $SIF_MONITOR_PID 2>/dev/null || true
-    
-    log "🧹 Cleaning up tar file..."
-    rm -f "$TAR_FILE"
-    
-    USED_METHOD="tar"
+    log "📤 Exporting Docker image to tar..."
+    if docker save "$DOCKER_IMAGE" -o "$TAR_FILE"; then
+        TAR_SIZE=$(du -h "$TAR_FILE" | cut -f1)
+        log "✅ Docker export complete: $TAR_SIZE"
+        
+        log "🔧 Building SIF from tar file..."
+        if timeout 1800 singularity build --force --fakeroot "$OUTPUT_PATH" "docker-archive://$TAR_FILE" 2>&1; then
+            if [[ -f "$OUTPUT_PATH" ]] && [[ -s "$OUTPUT_PATH" ]]; then
+                if singularity inspect "$OUTPUT_PATH" >/dev/null 2>&1; then
+                    BUILD_SUCCESS=true
+                    METHOD="tar"
+                    log "✅ Tar method succeeded!"
+                else
+                    log "❌ Invalid SIF file from tar method"
+                    rm -f "$OUTPUT_PATH" 2>/dev/null || true
+                fi
+            else
+                log "❌ Tar method produced no output"
+            fi
+        else
+            log "❌ Singularity build from tar failed"
+        fi
+        
+        # Cleanup tar file
+        log "🧹 Cleaning up tar file..."
+        rm -f "$TAR_FILE" 2>/dev/null || true
+    else
+        log "❌ Docker save to tar failed"
+    fi
 fi
+
+# ============================================================================
+# Final Validation and Results
+# ============================================================================
 
 END_TIME=$(date +%s)
 DURATION=$((END_TIME - START_TIME))
 DURATION_MIN=$((DURATION / 60))
 DURATION_SEC=$((DURATION % 60))
-SIZE=$(du -h "$OUTPUT_PATH" | cut -f1)
 
-log "============================================="
-log "✅ LAMAReg SINGULARITY BUILD COMPLETE"
-log "============================================="
-log "📦 File: $OUTPUT_PATH"
-log "📊 Size: $SIZE"
-log "⏱️  Time: ${DURATION_MIN}m ${DURATION_SEC}s"
-log "🎯 Method: $USED_METHOD"
-log ""
-log "🧪 Test Commands:"
-log "   # Test help command"
-log "   singularity run $OUTPUT_PATH --help"
-log ""
-log "   # Test Python import"
-log "   singularity exec $OUTPUT_PATH python -c 'import lamareg; print(\"LAMAReg ready!\")'"
-log ""
-log "   # Process data example"
-log "   singularity run -B /path/to/data:/data $OUTPUT_PATH python -m lamareg.cli --input /data/input.nii.gz --output /data/output.nii.gz"
-log ""
-log "🚀 LAMAReg SIF ready for deployment!"
-
-# Quick verification
-if [ -f "$OUTPUT_PATH" ] && [ -s "$OUTPUT_PATH" ]; then
-    log "✅ SIF file created successfully"
+if [ "$BUILD_SUCCESS" = "true" ] && [ -f "$OUTPUT_PATH" ] && [ -s "$OUTPUT_PATH" ]; then
+    SIZE=$(du -h "$OUTPUT_PATH" | cut -f1)
     
-    # Test the SIF file
-    log "🧪 Quick test..."
-    if timeout 60 singularity exec "$OUTPUT_PATH" python -c "import lamareg; print('LAMAReg import successful')" 2>/dev/null; then
-        log "✅ SIF test passed - LAMAReg import works"
+    log "============================================="
+    log "✅ LAMAReg SINGULARITY BUILD COMPLETE"
+    log "============================================="
+    log "📦 File: $OUTPUT_PATH"
+    log "📊 Size: $SIZE"
+    log "⏱️  Time: ${DURATION_MIN}m ${DURATION_SEC}s"
+    log "🎯 Method: $METHOD"
+    log ""
+    log "🧪 Test Commands:"
+    log "   # Test LAMAReg CLI"
+    log "   singularity exec $OUTPUT_PATH lamareg --help"
+    log ""
+    log "   # Test Python import"
+    log "   singularity exec $OUTPUT_PATH python -c 'import lamareg; print(\"LAMAReg ready!\")'"
+    log ""
+    log "   # Full registration example"
+    log "   singularity exec -B /path/to/data:/data $OUTPUT_PATH lamareg register \\"
+    log "     --moving /data/moving.nii.gz --fixed /data/fixed.nii.gz \\"
+    log "     --output /data/registered.nii.gz"
+    log ""
+    log "🚀 LAMAReg SIF ready for HPC deployment!"
+    
+    # Quick validation test
+    log "🧪 Running quick validation test..."
+    if singularity exec "$OUTPUT_PATH" python -c "import lamareg; print('✅ LAMAReg import successful')" 2>&1; then
+        log "✅ Validation passed - container is functional"
     else
-        log "⚠️  SIF test failed - but file created (might be container issue)"
+        log "⚠️  Validation warning - container may have issues"
     fi
+    
 else
+    log "============================================="
+    log "❌ SINGULARITY BUILD FAILED"
+    log "============================================="
+    log "⏱️  Time: ${DURATION_MIN}m ${DURATION_SEC}s"
     log "❌ ERROR: SIF file not created or empty"
+    log ""
+    log "🔍 Troubleshooting:"
+    log "   1. Check Docker image: docker image ls | grep lamareg"
+    log "   2. Check disk space: df -h $BASE_DIR"
+    log "   3. Check Singularity: singularity --version"
+    log "   4. Try building Docker image again: ./build_docker.sh"
+    log ""
     exit 1
 fi
