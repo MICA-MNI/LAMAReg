@@ -1,0 +1,220 @@
+#!/bin/bash
+set -eu
+
+# LAMAReg Automated Docker Deployment
+# ===================================
+# This script automatically:
+# 1. Migrates LAMAReg code to server
+# 2. Builds Docker image on server
+# 3. Tests the built image
+# 4. Provides usage instructions
+
+# Configuration
+SERVER_BASE_DIR="/host/cassio/export03/data/enning"
+BUILD_DIR="$SERVER_BASE_DIR/lamareg_build"
+BACKUP_DIR="$SERVER_BASE_DIR/lamareg_backup"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HOME_LAMAREG="$(dirname "$SCRIPT_DIR")"  # Parent directory of docker folder
+
+echo "🚀 LAMAReg Automated Docker Deployment"
+echo "======================================"
+echo ""
+echo "📍 Source: $HOME_LAMAREG"
+echo "📁 Server build directory: $BUILD_DIR"
+echo "🔧 Full automation: Migration → Build → Test"
+echo ""
+
+# Verify source LAMAReg directory
+if [[ ! -f "$HOME_LAMAREG/pyproject.toml" || ! -d "$HOME_LAMAREG/lamareg" ]]; then
+    echo "❌ Invalid LAMAReg directory: $HOME_LAMAREG"
+    echo "   Required: pyproject.toml and lamareg/ directory"
+    exit 1
+fi
+
+# Check server accessibility
+if [[ ! -d "$SERVER_BASE_DIR" ]]; then
+    echo "❌ Server directory not accessible: $SERVER_BASE_DIR"
+    echo "   Please ensure the server is mounted"
+    exit 1
+fi
+
+echo "✅ Pre-flight checks passed"
+echo ""
+
+# ================================================
+# STEP 1: MIGRATE FILES TO SERVER
+# ================================================
+echo "📋 STEP 1: Migrating files to server..."
+echo "======================================="
+
+# Check for changes
+SOURCE_CHANGED=false
+
+if [[ ! -d "$BUILD_DIR" ]]; then
+    echo "📁 Creating build directory: $BUILD_DIR"
+    mkdir -p "$BUILD_DIR"
+    SOURCE_CHANGED=true
+fi
+
+if [[ ! -f "$BUILD_DIR/.last_sync_lamareg" ]]; then
+    SOURCE_CHANGED=true
+    echo "🔄 First time setup - copying all files"
+elif [[ -n "$(find "$HOME_LAMAREG" -name '*.py' -o -name 'Dockerfile*' -o -name '*.toml' -o -name '*.txt' -o -name '*.md' -newer "$BUILD_DIR/.last_sync_lamareg" 2>/dev/null)" ]]; then
+    SOURCE_CHANGED=true
+    echo "🔄 Source files changed - updating build directory"
+else
+    echo "✅ Source files up to date - skipping migration"
+fi
+
+if $SOURCE_CHANGED; then
+    # Create backup if needed
+    if [[ -d "$BUILD_DIR" && ! -d "$BACKUP_DIR" ]]; then
+        echo "💾 Creating backup..."
+        cp -r "$BUILD_DIR" "$BACKUP_DIR"
+    fi
+    
+    echo "📋 Copying files to server..."
+    
+    # Copy Docker files from docker directory
+    cp "$SCRIPT_DIR/Dockerfile" "$BUILD_DIR/"
+    cp "$SCRIPT_DIR/.dockerignore" "$BUILD_DIR/"
+    cp "$SCRIPT_DIR/build_docker.sh" "$BUILD_DIR/"
+    cp "$SCRIPT_DIR/test_docker.sh" "$BUILD_DIR/"
+    chmod +x "$BUILD_DIR"/*.sh
+    
+    # Copy Python package files
+    cp "$HOME_LAMAREG/pyproject.toml" "$BUILD_DIR/"
+    cp "$HOME_LAMAREG/requirements.txt" "$BUILD_DIR/" 2>/dev/null || true
+    cp "$HOME_LAMAREG/setup.py" "$BUILD_DIR/" 2>/dev/null || true
+    cp "$HOME_LAMAREG/MANIFEST.in" "$BUILD_DIR/" 2>/dev/null || true
+    
+    # Copy source code
+    echo "   Copying LAMAReg source code..."
+    cp -r "$HOME_LAMAREG/lamareg" "$BUILD_DIR/"
+    
+    # Copy essential files
+    cp "$HOME_LAMAREG/README.md" "$BUILD_DIR/" 2>/dev/null || true
+    cp "$HOME_LAMAREG/LICENSE" "$BUILD_DIR/" 2>/dev/null || true
+    
+    # Copy tests if they exist
+    if [[ -d "$HOME_LAMAREG/tests" ]]; then
+        cp -r "$HOME_LAMAREG/tests" "$BUILD_DIR/"
+    fi
+    
+    # Copy docs (excluding large files)
+    if [[ -d "$HOME_LAMAREG/docs" ]]; then
+        cp -r "$HOME_LAMAREG/docs" "$BUILD_DIR/"
+    fi
+    
+    # Mark sync time
+    touch "$BUILD_DIR/.last_sync_lamareg"
+    echo "✅ Files migrated successfully"
+else
+    echo "✅ Migration skipped - files up to date"
+fi
+
+# Verify critical files
+echo "🔍 Verifying build setup..."
+CRITICAL_FILES=("pyproject.toml" "lamareg/__init__.py" "Dockerfile" "build_docker.sh")
+for file in "${CRITICAL_FILES[@]}"; do
+    if [[ -f "$BUILD_DIR/$file" ]]; then
+        echo "   ✅ $file"
+    else
+        echo "   ❌ $file - MISSING!"
+        exit 1
+    fi
+done
+
+echo ""
+
+# ================================================
+# STEP 2: BUILD DOCKER IMAGE
+# ================================================
+echo "🏗️  STEP 2: Building Docker image..."
+echo "===================================="
+
+pushd "$BUILD_DIR" > /dev/null
+
+echo "📦 Building Docker image: lamareg:latest"
+echo "📍 Build location: $BUILD_DIR"
+echo "⏱️  Expected time: 10-15 minutes"
+echo ""
+
+# Build with progress output
+docker build -t lamareg:latest . --progress=plain
+BUILD_EXIT_CODE=$?
+
+popd > /dev/null
+
+if [[ $BUILD_EXIT_CODE -ne 0 ]]; then
+    echo ""
+    echo "❌ Docker build failed (exit code: $BUILD_EXIT_CODE)"
+    echo "   Check the build output above for errors"
+    exit $BUILD_EXIT_CODE
+fi
+
+echo ""
+echo "✅ Docker image built successfully!"
+echo ""
+
+# ================================================
+# STEP 3: TEST DOCKER IMAGE
+# ================================================
+echo "🧪 STEP 3: Testing Docker image..."
+echo "=================================="
+
+# Test basic functionality
+echo "🔍 Testing basic functionality..."
+
+if docker run --rm lamareg:latest lamareg --help > /dev/null 2>&1; then
+    echo "✅ CLI help command works"
+else
+    echo "❌ CLI help command failed"
+    exit 1
+fi
+
+if docker run --rm lamareg:latest python -c "import lamareg; print('Import successful')" > /dev/null 2>&1; then
+    echo "✅ Python import works"
+else
+    echo "❌ Python import failed"
+    exit 1
+fi
+
+if docker run --rm lamareg:latest python -c "import tensorflow, nibabel, antspyx" > /dev/null 2>&1; then
+    echo "✅ Key dependencies available"
+else
+    echo "❌ Missing key dependencies"
+    exit 1
+fi
+
+echo ""
+
+# ================================================
+# DEPLOYMENT COMPLETE
+# ================================================
+echo "🎉 DEPLOYMENT COMPLETE!"
+echo "======================="
+echo ""
+echo "📊 Image Information:"
+docker images lamareg:latest
+echo ""
+echo "🧪 Quick Test Commands:"
+echo "   docker run --rm lamareg:latest lamareg --help"
+echo "   docker run --rm lamareg:latest python -c 'import lamareg; print(lamareg.__version__)'"
+echo ""
+echo "📋 Usage Examples:"
+echo "   # Basic usage with data mounting"
+echo "   docker run --rm -v /path/to/data:/data lamareg:latest lamareg --input /data/input.nii.gz --output /data/output.nii.gz"
+echo ""
+echo "   # Interactive mode"
+echo "   docker run --rm -it -v /path/to/data:/data lamareg:latest bash"
+echo ""
+echo "   # Background processing"
+echo "   docker run -d --name lamareg-job -v /path/to/data:/data lamareg:latest lamareg [options]"
+echo ""
+echo "💡 Next Steps:"
+echo "   1. Test with your data: docker run --rm -v /your/data:/data lamareg:latest lamareg --help"
+echo "   2. Create docker-compose.yml for easier deployment"
+echo "   3. Push to container registry if needed: docker tag lamareg:latest your-registry/lamareg:latest"
+echo ""
+echo "📁 Build artifacts saved at: $BUILD_DIR"
