@@ -40,17 +40,25 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
 # Copy source code
 COPY . .
 
-# Install LAMAReg in development mode
+# Install LAMAReg in development mode as root first
 RUN pip install -e .
 
 # Create a non-root user
 RUN useradd -m -u 1000 lamareg && \
     chown -R lamareg:lamareg /app
+
+# Set environment variables  
+ENV PYTHONPATH=/app
+ENV PATH=/usr/local/bin:$PATH
+
+# Switch to non-root user
 USER lamareg
 
-# Set environment variables
-ENV PYTHONPATH=/app
-ENV PATH=/home/lamareg/.local/bin:$PATH
+# Test that lamareg command is available
+RUN python -c "import lamareg; print('LAMAReg imported successfully')" && \
+    which python && \
+    (lamareg --help >/dev/null 2>&1 || python -m lamareg.cli --help >/dev/null 2>&1) && \
+    echo "LAMAReg CLI test passed"
 
-# Default command
-CMD ["lamareg", "--help"]
+# Default command (with fallback)
+CMD ["sh", "-c", "lamareg --help 2>/dev/null || python -m lamareg.cli --help"]

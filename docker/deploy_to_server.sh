@@ -186,9 +186,14 @@ echo "=================================="
 echo "🔍 Testing basic functionality..."
 
 if docker run --rm lamareg:latest lamareg --help > /dev/null 2>&1; then
-    echo "✅ CLI help command works"
+    echo "✅ CLI command works"
+elif docker run --rm lamareg:latest python -m lamareg.cli --help > /dev/null 2>&1; then
+    echo "✅ CLI works via Python module"
+    echo "ℹ️  Note: Using 'python -m lamareg.cli' instead of 'lamareg'"
 else
-    echo "❌ CLI help command failed"
+    echo "❌ CLI command failed"
+    echo "🔍 Debug info:"
+    docker run --rm lamareg:latest python -c "import lamareg; print('LAMAReg imported OK')" 2>/dev/null || echo "Import failed"
     exit 1
 fi
 
@@ -218,18 +223,20 @@ echo "📊 Image Information:"
 docker images lamareg:latest
 echo ""
 echo "🧪 Quick Test Commands:"
+echo "   # Try lamareg command first:"
 echo "   docker run --rm lamareg:latest lamareg --help"
-echo "   docker run --rm lamareg:latest python -c 'import lamareg; print(lamareg.__version__)'"
+echo "   # If that fails, use Python module:"
+echo "   docker run --rm lamareg:latest python -m lamareg.cli --help"
 echo ""
 echo "📋 Usage Examples:"
 echo "   # Basic usage with data mounting"
-echo "   docker run --rm -v /path/to/data:/data lamareg:latest lamareg --input /data/input.nii.gz --output /data/output.nii.gz"
+echo "   docker run --rm -v /path/to/data:/data lamareg:latest python -m lamareg.cli --input /data/input.nii.gz --output /data/output.nii.gz"
 echo ""
 echo "   # Interactive mode"
 echo "   docker run --rm -it -v /path/to/data:/data lamareg:latest bash"
 echo ""
 echo "   # Background processing"
-echo "   docker run -d --name lamareg-job -v /path/to/data:/data lamareg:latest lamareg [options]"
+echo "   docker run -d --name lamareg-job -v /path/to/data:/data lamareg:latest python -m lamareg.cli [options]"
 echo ""
 echo "💡 Next Steps:"
 echo "   1. Test with your data: docker run --rm -v /your/data:/data lamareg:latest lamareg --help"
