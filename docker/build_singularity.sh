@@ -12,10 +12,42 @@ OUTPUT_DIR="${BASE_DIR}/singularity"
 OUTPUT_PATH="${OUTPUT_DIR}/lamareg_latest.sif"
 DOCKER_IMAGE="${1:-}"
 
+# Configure temporary directories for Singularity
+# Use a writable location to avoid nodev filesystem issues
+TEMP_DIR="${BASE_DIR}/tmp"
+export SINGULARITY_TMPDIR="$TEMP_DIR"
+export TMPDIR="$TEMP_DIR"
+
 # Logging function
 echo_log() {
     echo "[$(date '+%H:%M:%S')] $1"
 }
+
+# Cleanup function
+cleanup_temp() {
+    if [[ -d "$TEMP_DIR" ]]; then
+        echo_log "🧹 Cleaning up temporary files..."
+        # Force cleanup with retries
+        for i in {1..3}; do
+            if rm -rf "$TEMP_DIR"/* 2>/dev/null; then
+                break
+            else
+                echo_log "⚠️  Cleanup attempt $i failed, retrying..."
+                sleep 2
+            fi
+        done
+        
+        # If still not clean, try more aggressive cleanup
+        if [[ -n "$(ls -A "$TEMP_DIR" 2>/dev/null)" ]]; then
+            echo_log "⚠️  Forcing cleanup of stubborn files..."
+            find "$TEMP_DIR" -type f -delete 2>/dev/null || true
+            find "$TEMP_DIR" -type d -empty -delete 2>/dev/null || true
+        fi
+    fi
+}
+
+# Setup cleanup trap
+trap cleanup_temp EXIT
 
 # Auto-detect Docker image if not provided
 if [[ -z "$DOCKER_IMAGE" ]]; then
@@ -42,6 +74,16 @@ echo_log "🐳 Docker image: $DOCKER_IMAGE"
 
 # Create output directory
 mkdir -p "$OUTPUT_DIR"
+
+# Create and configure temporary directory
+echo_log "🔧 Setting up temporary directory: $TEMP_DIR"
+mkdir -p "$TEMP_DIR"
+chmod 755 "$TEMP_DIR"
+
+# Clean any existing temp files
+cleanup_temp
+
+echo_log "🌡️  Temp directory configured: $SINGULARITY_TMPDIR"
 
 # Check Docker image
 if ! docker image inspect "$DOCKER_IMAGE" >/dev/null 2>&1; then
@@ -101,7 +143,7 @@ if [ "$USE_TAR_METHOD" = "false" ]; then
     # Try streaming method first
     echo_log "⚡ Attempting streaming method..."
     
-    if timeout 1800 bash -c "
+    if timeout 3600 bash -c "
         set -o pipefail
         docker save '$DOCKER_IMAGE' | singularity build --force '$OUTPUT_PATH' docker-archive:/dev/stdin
     " 2>&1; then
@@ -127,6 +169,9 @@ fi
 if [ "$BUILD_SUCCESS" = "false" ]; then
     echo_log "🔧 Using tar method (more reliable for problematic filesystems)..."
     
+    # Clean temp directory before tar method
+    cleanup_temp
+    
     TAR_FILE="${BASE_DIR}/lamareg_docker_$$.tar"
     
     echo_log "📤 Exporting Docker image to tar..."
@@ -135,7 +180,8 @@ if [ "$BUILD_SUCCESS" = "false" ]; then
         echo_log "✅ Docker export complete: $TAR_SIZE"
         
         echo_log "🔧 Building SIF from tar file..."
-        if timeout 1800 singularity build --force "$OUTPUT_PATH" "docker-archive://$TAR_FILE" 2>&1; then
+        # Increase timeout to 2 hours for large images
+        if timeout 7200 singularity build --force "$OUTPUT_PATH" "docker-archive://$TAR_FILE" 2>&1; then
             if [[ -f "$OUTPUT_PATH" ]] && [[ -s "$OUTPUT_PATH" ]]; then
                 if singularity inspect "$OUTPUT_PATH" >/dev/null 2>&1; then
                     BUILD_SUCCESS=true
@@ -209,11 +255,17 @@ else
     echo_log "⏱️  Time: ${DURATION_MIN}m ${DURATION_SEC}s"
     echo_log "❌ ERROR: SIF file not created or empty"
     echo_log ""
-    echo_log "🔍 Troubleshooting:"
-    echo_log "   1. Check Docker image: docker image ls | grep lamareg"
-    echo_log "   2. Check disk space: df -h $BASE_DIR"
-    echo_log "   3. Check Singularity: singularity --version"
-    echo_log "   4. Try building Docker image again: ./build_docker.sh"
+    echo_log "🔍 Troubleshooting for 'nodev' filesystem issues:"
+    echo_log "   1. Temp directory cleanup issues are common on nodev mounts"
+    echo_log "   2. Try manual cleanup: rm -rf $TEMP_DIR/*"
+    echo_log "   3. Check available space: df -h $BASE_DIR"
+    echo_log "   4. Verify Docker image: docker image ls | grep lamareg"
+    echo_log "   5. Check mount options: mount | grep $(dirname $BASE_DIR)"
+    echo_log ""
+    echo_log "💡 Alternative solutions:"
+    echo_log "   - Use a different output directory with exec mount"
+    echo_log "   - Build on local filesystem and copy SIF file"
+    echo_log "   - Use Docker directly instead of Singularity"
     echo_log ""
     exit 1
 fi
