@@ -135,13 +135,32 @@ echo "===================================="
 
 pushd "$BUILD_DIR" > /dev/null
 
-echo "📦 Building Docker image: lamareg:latest"
+# Check Docker connectivity first
+echo "� Checking Docker connectivity..."
+if ! docker info >/dev/null 2>&1; then
+    echo "❌ Cannot connect to Docker daemon"
+    echo "   Contact your system administrator to:"
+    echo "   1. Ensure Docker daemon is running"
+    echo "   2. Add your user to docker group"
+    echo "   3. Fix Docker socket permissions"
+    echo ""
+    echo "🧪 Test command: docker run --rm hello-world"
+    popd > /dev/null
+    exit 1
+fi
+
+echo "✅ Docker connectivity verified"
+echo "�📦 Building Docker image: lamareg:latest"
 echo "📍 Build location: $BUILD_DIR"
 echo "⏱️  Expected time: 10-15 minutes"
 echo ""
 
-# Build with progress output
-docker build -t lamareg:latest . --progress=plain
+# Build with server optimizations and detailed logging
+BUILD_LOG="build_lamareg_$(date +%Y%m%d_%H%M%S).log"
+echo "📝 Build logged to: $BUILD_LOG"
+
+# Use the build script which has all server optimizations
+./build_docker.sh
 BUILD_EXIT_CODE=$?
 
 popd > /dev/null

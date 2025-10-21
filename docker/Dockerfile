@@ -1,5 +1,14 @@
 FROM python:3.11-slim
 
+# Build arguments for server environment
+ARG CUSTOM_TMPDIR=/tmp
+ARG BUILDKIT_INLINE_CACHE=1
+
+# Set temporary directory for server builds
+ENV TMPDIR=${CUSTOM_TMPDIR}
+ENV TMP=${CUSTOM_TMPDIR}
+ENV TEMP=${CUSTOM_TMPDIR}
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     # Basic utilities
@@ -13,8 +22,10 @@ RUN apt-get update && apt-get install -y \
     # Neuroimaging dependencies
     libfreetype6-dev \
     pkg-config \
-    # Clean up
-    && rm -rf /var/lib/apt/lists/*
+    # Additional server dependencies
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p ${CUSTOM_TMPDIR}
 
 # Set working directory
 WORKDIR /app
