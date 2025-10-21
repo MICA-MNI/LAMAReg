@@ -52,12 +52,11 @@ if [[ $BUILD_EXIT_CODE -eq 0 ]]; then
     echo "✅ Docker image built successfully!"
     echo "🎯 Image: lamareg:latest"
     echo ""
-    echo "🧪 Test commands:"
-    echo "   docker run --rm lamareg:latest lamareg --help"
-    echo "   docker run --rm -v \$(pwd)/data:/data lamareg:latest lamareg [options]"
-    echo ""
     echo "📊 Image info:"
     docker images lamareg:latest
+    echo ""
+    echo "🚀 Ready for Singularity build:"
+    echo "   ./build_singularity.sh"
 else
     echo ""
     echo "❌ Docker build failed (exit code: $BUILD_EXIT_CODE)"
