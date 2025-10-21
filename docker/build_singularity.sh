@@ -5,6 +5,7 @@ set -eu
 # LAMAReg Singularity Build Script (Robust Version)
 # ============================================================================
 # Handles filesystem issues like 'nodev' mounts and tar header problems
+# Configured for systems without fakeroot privileges
 
 BASE_DIR="/host/cassio/export03/data/enning"
 OUTPUT_DIR="${BASE_DIR}/singularity"
@@ -102,7 +103,7 @@ if [ "$USE_TAR_METHOD" = "false" ]; then
     
     if timeout 1800 bash -c "
         set -o pipefail
-        docker save '$DOCKER_IMAGE' | singularity build --force --fakeroot '$OUTPUT_PATH' docker-archive:/dev/stdin
+        docker save '$DOCKER_IMAGE' | singularity build --force '$OUTPUT_PATH' docker-archive:/dev/stdin
     " 2>&1; then
         if [[ -f "$OUTPUT_PATH" ]] && [[ -s "$OUTPUT_PATH" ]]; then
             if singularity inspect "$OUTPUT_PATH" >/dev/null 2>&1; then
@@ -134,7 +135,7 @@ if [ "$BUILD_SUCCESS" = "false" ]; then
         echo_log "✅ Docker export complete: $TAR_SIZE"
         
         echo_log "🔧 Building SIF from tar file..."
-        if timeout 1800 singularity build --force --fakeroot "$OUTPUT_PATH" "docker-archive://$TAR_FILE" 2>&1; then
+        if timeout 1800 singularity build --force "$OUTPUT_PATH" "docker-archive://$TAR_FILE" 2>&1; then
             if [[ -f "$OUTPUT_PATH" ]] && [[ -s "$OUTPUT_PATH" ]]; then
                 if singularity inspect "$OUTPUT_PATH" >/dev/null 2>&1; then
                     BUILD_SUCCESS=true

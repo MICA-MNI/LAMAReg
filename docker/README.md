@@ -166,6 +166,13 @@ df -h /host/cassio/export03       # Check available disk space (need 10GB+)
 singularity --version             # Verify Singularity installation
 ```
 
+**No Fakeroot Privileges**
+```bash
+# Error: fakeroot command not found
+# Solution: Scripts automatically work without fakeroot
+./build_singularity.sh     # Already configured for no-fakeroot operation
+```
+
 ### Docker Build Fails
 1. Check disk space on server: `df -h`
 2. Verify Docker daemon: `docker info`
@@ -181,6 +188,8 @@ singularity --version             # Verify Singularity installation
 - Verify server directory is writable: `ls -la /host/cassio/export03/data/enning`
 - Check Docker daemon permissions
 - Ensure Singularity has proper access
+
+**No Fakeroot Required**: Scripts are configured to work without sudo or fakeroot privileges.
 
 ### Quick Diagnostics
 Run the diagnostic script for comprehensive system check:
