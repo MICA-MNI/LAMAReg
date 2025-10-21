@@ -37,6 +37,13 @@ echo "2️⃣  Checking Singularity..."
 if command -v singularity >/dev/null 2>&1; then
     VERSION=$(singularity --version)
     echo "   ✅ Singularity installed: $VERSION"
+    
+    # Check fakeroot availability (optional)
+    if command -v fakeroot >/dev/null 2>&1; then
+        echo "   ℹ️  fakeroot available (not required)"
+    else
+        echo "   ℹ️  fakeroot not available (configured for no-fakeroot operation)"
+    fi
 else
     echo "   ❌ Singularity not found"
     echo "   💡 Install with: sudo apt install singularity-container"
@@ -177,4 +184,5 @@ echo "💡 If builds still fail, check the improved build script that:"
 echo "   - Automatically detects filesystem issues"
 echo "   - Falls back to tar method for problematic mounts"
 echo "   - Validates SIF files after creation"
+echo "   - Works without sudo or fakeroot privileges"
 echo "   - Provides detailed error messages"
