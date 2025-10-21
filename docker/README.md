@@ -12,6 +12,8 @@ docker/
 ├── migrate_to_server.sh    # Server migration script  
 ├── build_docker.sh         # Docker build script
 ├── test_docker.sh          # Docker image testing script
+├── build_singularity.sh    # Convert Docker to Singularity SIF
+├── test_singularity.sh     # Test Singularity SIF container
 ├── build_local.sh          # Alternative local build option
 └── README.md              # This file
 ```
@@ -28,7 +30,9 @@ This single command will:
 1. Migrate files to the server
 2. Automatically build the Docker image
 3. Test the built image
-4. Provide usage instructions
+4. Optionally build Singularity SIF
+5. Test the SIF container
+6. Provide usage instructions
 
 ### Manual Steps (if needed)
 ```bash
@@ -40,7 +44,27 @@ cd /host/cassio/export03/data/enning/lamareg_build
 ./build_docker.sh
 
 # Step 3: Test the image
+# Test the image
 ./test_docker.sh
+
+# Build Singularity SIF (for HPC)
+./build_singularity.sh
+
+# Test SIF
+./test_singularity.sh
+```
+
+## 🚀 Singularity Usage (HPC Clusters)
+
+```bash
+# Basic help
+singularity run /path/to/lamareg_latest.sif --help
+
+# Process data (mount directories)
+singularity exec -B /path/to/data:/data /path/to/lamareg_latest.sif python -m lamareg.cli --input /data/input.nii.gz --output /data/output.nii.gz
+
+# Interactive shell
+singularity shell -B /path/to/data:/data /path/to/lamareg_latest.sif
 ```
 
 ## 📦 Docker Image Details

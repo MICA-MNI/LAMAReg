@@ -239,8 +239,56 @@ echo "   # Background processing"
 echo "   docker run -d --name lamareg-job -v /path/to/data:/data lamareg:latest python -m lamareg.cli [options]"
 echo ""
 echo "💡 Next Steps:"
-echo "   1. Test with your data: docker run --rm -v /your/data:/data lamareg:latest lamareg --help"
-echo "   2. Create docker-compose.yml for easier deployment"
-echo "   3. Push to container registry if needed: docker tag lamareg:latest your-registry/lamareg:latest"
+echo "   1. Test with your data: docker run --rm -v /your/data:/data lamareg:latest python -m lamareg.cli --help"
+echo "   2. Build Singularity SIF: ./build_singularity.sh"
+echo "   3. Test Singularity: ./test_singularity.sh"
+echo "   4. Deploy to HPC clusters using the SIF file"
+echo ""
+echo "🔄 Build Singularity SIF now?"
+echo ""
+echo "Options:"
+echo "   1) Build Singularity SIF from Docker image"
+echo "   2) Skip Singularity build"
+echo ""
+read -p "Enter your choice (1/2): " -n 1 -r SIF_CHOICE
+echo
+echo
+
+case $SIF_CHOICE in
+    1)
+        echo "🏗️  Building Singularity SIF..."
+        ./build_singularity.sh
+        SIF_BUILD_EXIT_CODE=$?
+        
+        if [[ $SIF_BUILD_EXIT_CODE -eq 0 ]]; then
+            echo "✅ Singularity SIF built successfully!"
+            echo "🧪 Testing SIF..."
+            ./test_singularity.sh
+            TEST_EXIT_CODE=$?
+            
+            if [[ $TEST_EXIT_CODE -eq 0 ]]; then
+                echo "🎉 LAMAReg Docker + Singularity deployment complete!"
+            else
+                echo "⚠️  SIF built but tests failed - check manually"
+            fi
+        else
+            echo "❌ Singularity SIF build failed"
+        fi
+        ;;
+    2)
+        echo "📁 Docker build complete - Singularity skipped"
+        echo ""
+        echo "🚀 To build SIF later:"
+        echo "   ./build_singularity.sh"
+        echo "   ./test_singularity.sh"
+        ;;
+    *)
+        echo "❌ Invalid choice - Singularity build skipped"
+        echo ""
+        echo "🚀 To build SIF later:"
+        echo "   ./build_singularity.sh"
+        echo "   ./test_singularity.sh"
+        ;;
+esac
 echo ""
 echo "📁 Build artifacts saved at: $BUILD_DIR"

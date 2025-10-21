@@ -94,6 +94,8 @@ if $SOURCE_CHANGED; then
     echo "   Copying build scripts..."
     cp "$SCRIPT_DIR/build_docker.sh" "$BUILD_DIR/"
     cp "$SCRIPT_DIR/test_docker.sh" "$BUILD_DIR/"
+    cp "$SCRIPT_DIR/build_singularity.sh" "$BUILD_DIR/"
+    cp "$SCRIPT_DIR/test_singularity.sh" "$BUILD_DIR/"
     
     # Copy Python package files
     echo "   Copying Python configuration files..."
