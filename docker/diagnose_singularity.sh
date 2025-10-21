@@ -14,11 +14,19 @@ echo ""
 
 # Check 1: Docker image
 echo "1️⃣  Checking Docker image..."
-if docker image inspect "$DOCKER_IMAGE" >/dev/null 2>&1; then
-    SIZE=$(docker image inspect "$DOCKER_IMAGE" --format='{{.Size}}' | awk '{print $1/1024/1024/1024 " GB"}')
-    echo "   ✅ Docker image found: $SIZE"
+
+# Check for registry version first
+if docker image inspect "localhost:5001/lamareg:latest" >/dev/null 2>&1; then
+    SIZE=$(docker image inspect "localhost:5001/lamareg:latest" --format='{{.Size}}' | awk '{print $1/1024/1024/1024 " GB"}')
+    echo "   ✅ Docker image found: localhost:5001/lamareg:latest ($SIZE)"
+# Check for local version
+elif docker image inspect "lamareg:latest" >/dev/null 2>&1; then
+    SIZE=$(docker image inspect "lamareg:latest" --format='{{.Size}}' | awk '{print $1/1024/1024/1024 " GB"}')
+    echo "   ✅ Docker image found: lamareg:latest ($SIZE)"
 else
-    echo "   ❌ Docker image missing: $DOCKER_IMAGE"
+    echo "   ❌ Docker image missing. Checked:"
+    echo "      - localhost:5001/lamareg:latest"
+    echo "      - lamareg:latest"
     echo "   💡 Build it with: ./build_docker.sh"
 fi
 
@@ -132,7 +140,8 @@ echo "=============================="
 # Count issues
 ISSUES=0
 
-if ! docker image inspect "$DOCKER_IMAGE" >/dev/null 2>&1; then
+# Check for either Docker image
+if ! docker image inspect "localhost:5001/lamareg:latest" >/dev/null 2>&1 && ! docker image inspect "lamareg:latest" >/dev/null 2>&1; then
     ISSUES=$((ISSUES + 1))
 fi
 
