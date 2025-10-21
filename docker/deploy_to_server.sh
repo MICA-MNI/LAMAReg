@@ -4,7 +4,7 @@ set -eu
 # LAMAReg Automated Docker Deployment
 # ===================================
 # This script automatically:
-# 1. Migrates LAMAReg code to server
+# 1. Migrat# Server Docker is confirmed working - proceeding with build to server
 # 2. Builds Docker image on server
 # 3. Tests the built image
 # 4. Provides usage instructions

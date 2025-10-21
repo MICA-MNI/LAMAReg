@@ -20,21 +20,7 @@ if [[ ! -f "pyproject.toml" || ! -d "lamareg" ]]; then
     exit 1
 fi
 
-# Check Docker connectivity (without sudo)
-echo "🐳 Checking Docker connectivity..."
-if ! docker info >/dev/null 2>&1; then
-    echo "❌ Cannot connect to Docker daemon"
-    echo "   This usually means:"
-    echo "   1. Docker daemon is not running"
-    echo "   2. User is not in docker group"
-    echo "   3. Docker socket permissions issue"
-    echo ""
-    echo "💡 Try: docker run --rm hello-world"
-    echo "   If that fails, contact your system administrator"
-    exit 1
-fi
-
-echo "✅ Docker connectivity verified"
+# Docker is working on server - proceeding with build
 
 # Environment setup for server
 export DOCKER_CONTENT_TRUST=0

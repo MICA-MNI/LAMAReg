@@ -9,9 +9,10 @@ docker/
 ├── Dockerfile              # Main Docker image definition
 ├── .dockerignore           # Files to exclude from Docker build context
 ├── deploy_to_server.sh     # Automated deployment script (migration + build)
-├── migrate_to_server.sh    # Server migration script
+├── migrate_to_server.sh    # Server migration script  
 ├── build_docker.sh         # Docker build script
 ├── test_docker.sh          # Docker image testing script
+├── build_local.sh          # Alternative local build option
 └── README.md              # This file
 ```
 
