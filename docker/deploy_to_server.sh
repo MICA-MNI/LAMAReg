@@ -17,12 +17,14 @@ BACKUP_DIR="$SERVER_BASE_DIR/lamareg_backup"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOME_LAMAREG="$(dirname "$SCRIPT_DIR")"  # Parent directory of docker folder
 
-echo "🚀 LAMAReg Automated Docker Deployment"
-echo "======================================"
 echo ""
-echo "📍 Source: $HOME_LAMAREG"
-echo "📁 Server build directory: $BUILD_DIR"
-echo "🔧 Full automation: Migration → Build → Test"
+echo "🚀 LAMAReg Server Deployment"
+echo "============================"
+echo ""
+echo "📍 Server path: $SERVER_DIR"
+echo "� Docker registry: $DOCKER_REGISTRY"
+echo "🏷️  Image tag: $IMAGE_TAG"
+echo "💾 SIF output: $BASE_DIR/singularity/lamareg_latest.sif"
 echo ""
 
 # Verify source LAMAReg directory

@@ -18,7 +18,29 @@ docker/
 └── README.md              # This file
 ```
 
-## 🚀 Quick Start
+## 🚀 Deployment Options
+
+### Option 1: Full Deployment (Docker + Singularity)
+```bash
+./deploy_to_server.sh    # Complete automated deployment
+```
+
+### Option 2: Singularity-Only (for existing Docker images)
+```bash
+./build_singularity.sh      # Standard build
+# OR
+./build_singularity_nodev.sh # For problematic filesystems
+```
+
+### Option 3: Docker-Only (Singularity alternative)
+```bash
+./deploy_docker_only.sh     # Creates wrapper scripts, no SIF needed
+```
+
+Choose based on your environment:
+- **HPC clusters**: Use Singularity options (1 or 2)  
+- **Problematic filesystems**: Try option 2 alternative, fallback to option 3
+- **Docker-native environments**: Use option 3
 
 ### Automated Deployment (Recommended)
 ```bash
@@ -143,9 +165,25 @@ BUILD_DIR="$SERVER_BASE_DIR/lamareg_build"
 **"nodev" Mount Warning**
 ```bash
 # Error: SINGULARITY: WARNING: 'nodev' mount option set on /host/cassio/export03
-# Solution: Script automatically detects this and uses tar method
-./diagnose_singularity.sh  # Check system status first
-./build_singularity.sh     # Will handle filesystem issues automatically
+# Solutions (try in order):
+
+# 1. Updated main script (handles temp directories automatically)
+./build_singularity.sh
+
+# 2. Alternative script for problematic filesystems
+./build_singularity_nodev.sh
+
+# 3. Docker-only deployment (bypasses Singularity entirely)
+./deploy_docker_only.sh
+```
+
+**Temp Directory Cleanup Errors**
+```bash
+# Error: Could not remove bundle: directory not empty
+# Solutions:
+rm -rf /host/cassio/export03/data/enning/tmp/*  # Manual cleanup
+./build_singularity_nodev.sh                   # Uses different temp locations
+./deploy_docker_only.sh                        # Skip Singularity entirely
 ```
 
 **Invalid Tar Header Error**
