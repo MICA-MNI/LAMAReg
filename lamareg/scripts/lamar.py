@@ -197,6 +197,11 @@ def lamareg(
     env["ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS"] = str(ants_threads)
     env["OMP_NUM_THREADS"] = str(ants_threads)  # OpenMP threads for ANTs
 
+    temp_files = []
+    temp_warp_file = None
+    temp_inverse_warp_file = None
+    temp_parc_file = None
+
     try:
         # WORKFLOW 1 & 2: Full registration or generate warpfield
         if not apply_warpfield:
@@ -278,8 +283,9 @@ def lamareg(
 
             if output_parc is not None:
                 if not disable_robust:
-                    with tempfile.NamedTemporaryFile(suffix=f"_tmp_output_parc.nii.gz", delete=False) as tmp_parc:
+                    with tempfile.NamedTemporaryFile(suffix="_tmp_output_parc.nii.gz", delete=False) as tmp_parc:
                         temp_parc_file = tmp_parc.name
+                    temp_files.append(temp_parc_file)
                     cmd.extend(["--output", temp_parc_file])
                 else:
                     cmd.extend(["--output", output_parc])
@@ -292,8 +298,9 @@ def lamareg(
             if warp_file:
                 if not disable_robust:
                     if not secondary_warp_file:
-                        with tempfile.NamedTemporaryFile(suffix=f"_tmp_warp.nii.gz", delete=False) as tmp_warp:
+                        with tempfile.NamedTemporaryFile(suffix="_tmp_warp.nii.gz", delete=False) as tmp_warp:
                             temp_warp_file = tmp_warp.name
+                        temp_files.append(temp_warp_file)
                         cmd.extend(["--warp-file", temp_warp_file])
                     else:
                         cmd.extend(["--warp-file", warp_file])
@@ -303,8 +310,9 @@ def lamareg(
             if inverse_warp_file:
                 if not disable_robust:
                     if not inverse_secondary_warp_file:
-                        with tempfile.NamedTemporaryFile(suffix=f"_tmp_inverse_warp.nii.gz", delete=False) as tmp_inverse_warp:
+                        with tempfile.NamedTemporaryFile(suffix="_tmp_inverse_warp.nii.gz", delete=False) as tmp_inverse_warp:
                             temp_inverse_warp_file = tmp_inverse_warp.name
+                        temp_files.append(temp_inverse_warp_file)
                         cmd.extend(["--inverse-warp-file", temp_inverse_warp_file])
                     else:
                         cmd.extend(["--inverse-warp-file", inverse_warp_file])
@@ -365,9 +373,11 @@ def lamareg(
                     robust_cmd.append("--verbose")
                 subprocess.run(robust_cmd, check=True, env=env)
                 try:
-                    os.remove(temp_warp_file)
-                    os.remove(temp_inverse_warp_file)
-                except:
+                    if temp_warp_file and os.path.exists(temp_warp_file):
+                        os.remove(temp_warp_file)
+                    if temp_inverse_warp_file and os.path.exists(temp_inverse_warp_file):
+                        os.remove(temp_inverse_warp_file)
+                except OSError:
                     pass
 
                 apply_cmd = [
@@ -478,6 +488,13 @@ def lamareg(
     except subprocess.CalledProcessError as e:
         print(f"Error during processing: {e}", file=sys.stderr)
         sys.exit(1)
+    finally:
+        for temp_path in temp_files:
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
 
 
 def main():
