@@ -32,11 +32,11 @@ def print_cli_help():
 
     help_text = f"""
     {CYAN}{BOLD}╔════════════════════════════════════════════════════════════════╗
-    ║                             LAMAR                              ║
+    ║                            LAMAReg                             ║
     ║             Label Augmented Modality Agnostic Registration     ║
     ╚════════════════════════════════════════════════════════════════╝{RESET}
 
-    LAMAR provides contrast-agnostic registration between different MRI modalities
+    LAMAReg provides contrast-agnostic registration between different MRI modalities
     by using SynthSeg's brain parcellation to enable robust alignment between images
     with different contrasts (e.g., T1w to T2w, FLAIR to T1w, DWI to T1w).
 
@@ -67,24 +67,25 @@ def print_cli_help():
       {YELLOW}--moving{RESET} PATH         : Input image to be registered
       {YELLOW}--fixed{RESET} PATH          : Reference image (target space)
       {YELLOW}--output{RESET} PATH         : Output registered image
+      
+    {BLUE}# Optional Arguments:{RESET}
       {YELLOW}--moving-parc{RESET} PATH    : Path for moving image parcellation
       {YELLOW}--fixed-parc{RESET} PATH     : Path for fixed image parcellation
       {YELLOW}--registered-parc{RESET} PATH: Path for registered parcellation
-      {YELLOW}--affine{RESET} PATH         : Path for affine transformation
-      {YELLOW}--warpfield{RESET} PATH      : Path for warp field
-      
-    {BLUE}# Optional Arguments:{RESET}
+      {YELLOW}--affine{RESET} PATH         : Path for affine transform (temp file if omitted)
+      {YELLOW}--warpfield{RESET} PATH      : Path for primary warp (temp file if omitted)
+      {YELLOW}--inverse-warpfield{RESET} PATH        : Path for inverse primary warp
+      {YELLOW}--secondary-warpfield{RESET} PATH      : Path for robust stage warp (requires --compose off)
+      {YELLOW}--inverse-secondary-warpfield{RESET} PATH : Path for inverse robust warp (requires --compose off)
+      {YELLOW}--compose{RESET}             : Compose primary and secondary warps into one output
       {YELLOW}--registration-method{RESET} STR       : Registration method (default: SyNRA)
       {YELLOW}--synthseg-threads{RESET} N            : SynthSeg threads (default: all cores)
       {YELLOW}--ants-threads{RESET} N                : ANTs threads (default: all cores)
-      {YELLOW}--qc-csv{RESET} PATH                   : Path for QC Dice score CSV file
-      {YELLOW}--inverse-warpfield{RESET} PATH        : Path for inverse warp field
+      {YELLOW}--qc-csv{RESET} PATH                   : Path for QC Dice score CSV (required to run QC; omit to skip)
       {YELLOW}--skip-fixed-parc{RESET}               : Skip fixed image parcellation
       {YELLOW}--skip-moving-parc{RESET}              : Skip moving image parcellation
       {YELLOW}--skip-qc{RESET}                       : Skip quality control (default: False)
       {YELLOW}--disable-robust{RESET}                : Disable two-stage registration (default: False)
-      {YELLOW}--secondary-warpfield{RESET} PATH      : Path for secondary warp (robust mode)
-      {YELLOW}--inverse-secondary-warpfield{RESET} PATH : Path for inverse secondary warp
       {YELLOW}--verbose{RESET}                        : Enable verbose output
 
     {CYAN}{BOLD}────────────────── GENERATE WARPFIELD ────────────────────{RESET}
@@ -97,9 +98,11 @@ def print_cli_help():
       {YELLOW}--moving{RESET} PATH      : Input image to transform
       {YELLOW}--fixed{RESET} PATH       : Reference space image
       {YELLOW}--output{RESET} PATH      : Output registered image
-      {YELLOW}--warpfield{RESET} PATH   : Path to warp field
-      {YELLOW}--affine{RESET} PATH      : Path to affine transformation
       
+    {BLUE}# At least one transform required:{RESET}
+      {YELLOW}--warpfield{RESET} PATH   : Displacement field to apply
+      {YELLOW}--affine{RESET} PATH      : Affine transform (.mat)
+
     {BLUE}# Optional Arguments:{RESET}
       {YELLOW}--ants-threads{RESET} N         : ANTs threads (default: all cores)
       {YELLOW}--secondary-warpfield{RESET} PATH : Path to secondary warp (for robust mode)
@@ -176,12 +179,13 @@ def print_cli_help():
          → Total transform = primary_warp ∘ secondary_warp
     
     {BLUE}WARPFIELD COMPOSITION:{RESET}
-    When applying transforms, they are applied in this order:
-      moving → {MAGENTA}[secondary_warp]{RESET} → {MAGENTA}[primary_warp]{RESET} → {MAGENTA}[affine]{RESET} → fixed
+    • Default: robust stage keeps primary and secondary warpfields separate.
+    • {YELLOW}--compose{RESET} writes a single composed warp (secondary outputs must be omitted).
+    • Providing exactly one warpfield path without {YELLOW}--compose{RESET} is invalid.
     
-    The composition formula for displacement fields A and B:
-      C(x) = A(x) + B(x + A(x))
-    where A is applied first, then B is applied to the warped coordinates.
+    {BLUE}QUALITY CONTROL:{RESET}
+    • Dice-based QC runs only when {YELLOW}--qc-csv{RESET} is supplied.
+    • Omitting {YELLOW}--qc-csv{RESET} automatically skips QC (equivalent to --skip-qc).
     
     {BLUE}PERFORMANCE:{RESET}
     • Default threads: Uses all available CPU cores
@@ -279,7 +283,7 @@ def main():
         help="Number of threads to use for ANTs registration (default: 1)",
     )
     register_parser.add_argument(
-        "--qc-csv", help="Path for quality control Dice score CSV file"
+        "--qc-csv", help="Path for QC Dice score CSV (required to enable QC; omit to skip)"
     )
     register_parser.add_argument(
         "--skip-qc", action="store_true", help="whether to skip QC (default: False)"
@@ -294,6 +298,11 @@ def main():
         "--disable-robust",
         action="store_true",
         help="Whether to disable robust registration (default: False)",
+    )
+    register_parser.add_argument(
+        "--compose",
+        action="store_true",
+        help="Compose the primary and secondary warpfields into a single warpfield (default: do not compose)",
     )
     register_parser.add_argument(
         "--verbose",
@@ -366,7 +375,7 @@ def main():
         help="Number of threads to use for ANTs registration (default: 1)",
     )
     warpfield_parser.add_argument(
-        "--qc-csv", help="Path for quality control Dice score CSV file"
+        "--qc-csv", help="Path for QC Dice score CSV (required to enable QC; omit to skip)"
     )
     warpfield_parser.add_argument(
         "--skip-qc", action="store_true", help="whether to skip QC (default: False)"
@@ -375,6 +384,11 @@ def main():
         "--disable-robust",
         action="store_true",
         help="Whether to disable robust registration (default: False)",
+    )
+    warpfield_parser.add_argument(
+        "--compose",
+        action="store_true",
+        help="Compose the primary and secondary warpfields into a single warpfield (default: do not compose)",
     )
     warpfield_parser.add_argument(
         "--verbose",
@@ -472,151 +486,58 @@ def main():
 
     # Handle command routing
     if args.command == "register":
-        # Create a temporary directory for files that weren't specified
-        temp_dir = None
-        temp_files = []
+        # Run the registration
+        lamareg(
+            input_image=args.moving,
+            reference_image=args.fixed,
+            output_image=args.output,
+            input_parc=args.moving_parc,
+            reference_parc=args.fixed_parc,
+            output_parc=args.registered_parc,
+            affine_file=args.affine,
+            warp_file=args.warpfield,
+            inverse_warp_file=args.inverse_warpfield,
+            compose=args.compose,
+            registration_method=args.registration_method,
+            synthseg_threads=args.synthseg_threads,
+            ants_threads=args.ants_threads,
+            skip_fixed_parc=args.skip_fixed_parc,
+            skip_moving_parc=args.skip_moving_parc,
+            skip_qc=args.skip_qc,
+            qc_csv=args.qc_csv,
+            disable_robust=args.disable_robust,
+            secondary_warp_file=args.secondary_warpfield,
+            inverse_secondary_warp_file=args.inverse_secondary_warpfield,
+            verbose=args.verbose
+        )
 
-        if not all(
-            [
-                args.moving_parc,
-                args.fixed_parc,
-                args.registered_parc,
-                args.affine,
-                args.warpfield,
-            ]
-        ):
-            temp_dir = tempfile.mkdtemp(prefix="lamar_temp_")
-            print(f"Created temporary directory for files: {temp_dir}")
-
-        # Assign temporary paths for missing arguments
-        if not args.moving_parc:
-            args.moving_parc = os.path.join(temp_dir, "moving_parc.nii.gz")
-            temp_files.append(args.moving_parc)
-
-        if not args.fixed_parc:
-            args.fixed_parc = os.path.join(temp_dir, "fixed_parc.nii.gz")
-            temp_files.append(args.fixed_parc)
-
-        if not args.registered_parc:
-            args.registered_parc = os.path.join(temp_dir, "registered_parc.nii.gz")
-            temp_files.append(args.registered_parc)
-
-        if not args.affine:
-            args.affine = os.path.join(temp_dir, "affine.mat")
-            temp_files.append(args.affine)
-
-        if not args.warpfield:
-            args.warpfield = os.path.join(temp_dir, "warpfield.nii.gz")
-            temp_files.append(args.warpfield)
-
-        try:
-            # Run the registration
-            lamareg(
-                input_image=args.moving,
-                reference_image=args.fixed,
-                output_image=args.output,
-                input_parc=args.moving_parc,
-                reference_parc=args.fixed_parc,
-                output_parc=args.registered_parc,
-                affine_file=args.affine,
-                warp_file=args.warpfield,
-                inverse_warp_file=args.inverse_warpfield,
-                registration_method=args.registration_method,
-                synthseg_threads=args.synthseg_threads,
-                ants_threads=args.ants_threads,
-                skip_fixed_parc=args.skip_fixed_parc,
-                skip_moving_parc=args.skip_moving_parc,
-                skip_qc=args.skip_qc,
-                qc_csv=args.qc_csv,
-                disable_robust=args.disable_robust,
-                secondary_warp_file=args.secondary_warpfield,
-                inverse_secondary_warp_file=args.inverse_secondary_warpfield,
-                verbose=args.verbose
-            )
-
-            # Clean up temporary files after successful completion
-            if temp_dir:
-                print(f"Cleaning up temporary files in {temp_dir}")
-                shutil.rmtree(temp_dir)
-
-        except Exception as e:
-            print(f"Error during registration: {e}", file=sys.stderr)
-            print(f"Temporary files remain in: {temp_dir}")
-            sys.exit(1)
     elif args.command == "generate-warpfield":
-        # Create a temporary directory for files that weren't specified
-        temp_dir = None
-        temp_files = []
+        # Run the warpfield generation
+        lamareg(
+            input_image=args.moving,
+            reference_image=args.fixed,
+            output_image=None,  # No output image for generate-warpfield
+            input_parc=args.moving_parc,
+            reference_parc=args.fixed_parc,
+            output_parc=args.registered_parc,
+            affine_file=args.affine,
+            warp_file=args.warpfield,
+            inverse_warp_file=args.inverse_warpfield,
+            generate_warpfield=True,
+            compose=args.compose,
+            registration_method=args.registration_method,
+            synthseg_threads=args.synthseg_threads,
+            ants_threads=args.ants_threads,
+            skip_fixed_parc=args.skip_fixed_parc,
+            skip_moving_parc=args.skip_moving_parc,
+            skip_qc=args.skip_qc,
+            qc_csv=args.qc_csv,
+            disable_robust=args.disable_robust,
+            secondary_warp_file=args.secondary_warpfield,
+            inverse_secondary_warp_file=args.inverse_secondary_warpfield,
+            verbose=args.verbose
+        )
 
-        if not all(
-            [
-                args.moving_parc,
-                args.fixed_parc,
-                args.registered_parc,
-                args.affine,
-                args.warpfield,
-            ]
-        ):
-            temp_dir = tempfile.mkdtemp(prefix="lamar_temp_")
-            print(f"Created temporary directory for files: {temp_dir}")
-
-        # Assign temporary paths for missing arguments
-        if not args.moving_parc:
-            args.moving_parc = os.path.join(temp_dir, "moving_parc.nii.gz")
-            temp_files.append(args.moving_parc)
-
-        if not args.fixed_parc:
-            args.fixed_parc = os.path.join(temp_dir, "fixed_parc.nii.gz")
-            temp_files.append(args.fixed_parc)
-
-        if not args.registered_parc:
-            args.registered_parc = os.path.join(temp_dir, "registered_parc.nii.gz")
-            temp_files.append(args.registered_parc)
-
-        if not args.affine:
-            args.affine = os.path.join(temp_dir, "affine.mat")
-            temp_files.append(args.affine)
-
-        if not args.warpfield:
-            args.warpfield = os.path.join(temp_dir, "warpfield.nii.gz")
-            temp_files.append(args.warpfield)
-
-        try:
-            # Run the warpfield generation
-            lamareg(
-                input_image=args.moving,
-                reference_image=args.fixed,
-                output_image=None,  # No output image for generate-warpfield
-                input_parc=args.moving_parc,
-                reference_parc=args.fixed_parc,
-                output_parc=args.registered_parc,
-                affine_file=args.affine,
-                warp_file=args.warpfield,
-                inverse_warp_file=args.inverse_warpfield,
-                generate_warpfield=True,
-                registration_method=args.registration_method,
-                synthseg_threads=args.synthseg_threads,
-                ants_threads=args.ants_threads,
-                skip_fixed_parc=args.skip_fixed_parc,
-                skip_moving_parc=args.skip_moving_parc,
-                skip_qc=args.skip_qc,
-                qc_csv=args.qc_csv,
-                disable_robust=args.disable_robust,
-                secondary_warp_file=args.secondary_warpfield,
-                inverse_secondary_warp_file=args.inverse_secondary_warpfield,
-                verbose=args.verbose
-            )
-
-            # Clean up temporary files after successful completion
-            if temp_dir:
-                print(f"Cleaning up temporary files in {temp_dir}")
-                shutil.rmtree(temp_dir)
-
-        except Exception as e:
-            print(f"Error during warpfield generation: {e}", file=sys.stderr)
-            if temp_dir:
-                print(f"Temporary files remain in: {temp_dir}")
-            sys.exit(1)
     elif args.command == "apply-warpfield":
         lamareg(
             input_image=args.moving,

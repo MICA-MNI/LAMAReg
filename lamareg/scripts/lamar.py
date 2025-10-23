@@ -44,12 +44,14 @@ def lamareg(
     inverse=False,
     secondary_warp_file=None,
     inverse_secondary_warp_file=None,
-    verbose=False
+    verbose=False,
+    compose=False
     
 ):
     """
     Perform contrast-agnostic registration using SynthSeg parcellation.
     """
+    temp_files = []
     # Validate arguments based on the selected workflow
     if generate_warpfield and apply_warpfield:
         raise ValueError(
@@ -68,7 +70,6 @@ def lamareg(
         )
     if ants_threads < 1:
         raise ValueError(f"Invalid thread count for ANTs: {ants_threads}. Must be >= 1")
-    print("skip qc = ", skip_qc)
     # Workflow-specific validation
     if not apply_warpfield:
         # Registration or Generate-warpfield workflow
@@ -76,46 +77,95 @@ def lamareg(
             raise ValueError("--moving is required for registration")
         if reference_image is None:
             raise ValueError("--fixed is required for registration")
-        if input_parc is None:
-            raise ValueError("--moving-parc is required for registration")
-        if reference_parc is None:
-            raise ValueError("--fixed-parc is required for registration")
-        if output_parc is None:
-            raise ValueError("--registered-parc is required for registration")
-
         # For normal registration (not generate-warpfield), output image is required
         if not generate_warpfield and output_image is None:
             raise ValueError("--output is required for registration")
+        
+        if skip_qc:
+            print("Quality control (QC) generation is disabled")
 
+        if not disable_robust:
+            print(
+                "\nNote: Robust registration is enabled - a second registration stage will be performed for improved accuracy"
+            )
+            if compose and warp_file is not None:
+                print(
+                    "Note: Warp field composition is enabled - warp fields from both stages will be composed"
+                )
+                print(
+                    "Warning: Warpfield composition can result in loss of precision and accuracy in the resulting warpfields. Consider providing a secondary warp field file path for improved results if you plan to re-use warpfields."
+                )
+                if secondary_warp_file is not None:
+                    raise ValueError(
+                        "Cannot use --compose with --secondary-warpfield. Choose one or the other."
+                    )
+                if inverse_secondary_warp_file is not None:
+                    raise ValueError(
+                        "Cannot use --compose with --inverse-secondary-warpfield. Choose one or the other."
+                    )
+            if not compose and warp_file is not None:
+                print(
+                    "Note: Warp field composition is disabled - first and second stage warp fields will be saved separately"
+                )
+                if secondary_warp_file is None:
+                    raise ValueError(
+                        "Secondary warp field file path is required when not composing warp fields. Provide --secondary-warpfield."
+                    )
+                if inverse_secondary_warp_file is None:
+                    raise ValueError(
+                        "Inverse secondary warp field file path is required when not composing warp fields. Provide --inverse-secondary-warpfield."
+                    )
+        else:
+            print(
+                "\nNote: Robust registration is disabled - only a single registration stage will be performed"
+            )
+            if compose:
+                raise ValueError(
+                    "Cannot use --compose when robust registration is disabled"
+                )
+            if secondary_warp_file is not None:
+                raise ValueError(
+                    "Cannot use --secondary-warpfield when robust registration is disabled"
+                )
+            if inverse_secondary_warp_file is not None:
+                raise ValueError(
+                    "Cannot use --inverse-secondary-warpfield when robust registration is disabled"
+                )
         # If generating warpfield, warn if transform files not specified
         if affine_file is None:
             print(
                 "Warning: No affine transform file path provided - affine transform will not be saved"
             )
+            affine_file = tempfile.NamedTemporaryFile(suffix="_tmp_affine.mat", delete=False).name
+            temp_files.append(affine_file)
         if warp_file is None:
             print(
                 "Warning: No warp field file path provided - warp field will not be saved"
             )
+            warp_file = tempfile.NamedTemporaryFile(suffix="_tmp_warp.nii.gz", delete=False).name
+            temp_files.append(warp_file)
         if inverse_warp_file is None:
             print(
                 "Warning: No inverse warp field file path provided - inverse warp field will not be saved"
             )
-        if secondary_warp_file is None:
-            if not disable_robust:
-                print(
-                    "Warning: No secondary warp field file path provided - first and second stage warp fields will be composed"
-                )
-                print(
-                    "Warning: Warpfield composition can result in loss of precision and accuracy in the resulting warpfields. Consider providing a secondary warp field file path for improved results if you plan to re-use warpfields."
-                )
-        if inverse_secondary_warp_file is None:
-            if not disable_robust:
-                print(
-                    "Warning: No inverse secondary warp field file path provided - first and second stage inverse warp fields will be composed"
-                )
-                print(
-                    "Warning: Warpfield composition can result in loss of precision and accuracy in the resulting warpfields. Consider providing a secondary inverse warp field file path for improved results if you plan to re-use warpfields."
-                )
+        if input_parc is None:
+            print(
+                "Warning: No moving parcellation file path provided - parcellation will not be saved"
+            )
+            input_parc = tempfile.NamedTemporaryFile(suffix="_tmp_moving_parc.nii.gz", delete=False).name
+            temp_files.append(input_parc)
+        if reference_parc is None:
+            print(
+                "Warning: No fixed parcellation file path provided - parcellation will not be saved"
+            )
+            reference_parc = tempfile.NamedTemporaryFile(suffix="_tmp_fixed_parc.nii.gz", delete=False).name
+            temp_files.append(reference_parc)
+        if output_parc is None:
+            print(
+                "Warning: No output parcellation file path provided - registered parcellation will not be saved"
+            )
+            output_parc = tempfile.NamedTemporaryFile(suffix="_tmp_registered_parc.nii.gz", delete=False).name
+            temp_files.append(output_parc)
     else:
         # Apply-warpfield workflow
         if input_image is None:
@@ -124,10 +174,10 @@ def lamareg(
             raise ValueError("--fixed is required for apply-warpfield")
         if output_image is None:
             raise ValueError("--output is required for apply-warpfield")
-        if affine_file is None:
-            raise ValueError("--affine is required for apply-warpfield")
-        if warp_file is None:
-            raise ValueError("--warpfield is required for apply-warpfield")
+        if affine_file is None and warp_file is None:
+            raise ValueError(
+                "At least one of --affine or --warpfield is required for apply-warpfield"
+            )
 
         # Validate transform files exist
         for transform_file in [affine_file, warp_file]:
@@ -136,16 +186,12 @@ def lamareg(
 
     # Add QC CSV validation
     if not apply_warpfield and not generate_warpfield:
-        # Only relevant for standard registration workflow
-        if qc_csv is None:
-            # No QC CSV path provided, will use default
-            if output_parc is not None:
-                default_qc_path = os.path.splitext(output_parc)[0] + "_dice_scores.csv"
-                print(
-                    f"No QC CSV path provided - Dice scores will be saved to: {default_qc_path}"
-                )
+        if skip_qc:
+            pass
+        elif qc_csv is None:
+            print("Quality control (QC) skipped automatically because --qc-csv was not provided.")
+            skip_qc = True
         else:
-            # QC CSV path provided, check if directory is writable
             qc_dir = os.path.dirname(qc_csv)
             if qc_dir:
                 if os.path.exists(qc_dir):
@@ -197,7 +243,6 @@ def lamareg(
     env["ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS"] = str(ants_threads)
     env["OMP_NUM_THREADS"] = str(ants_threads)  # OpenMP threads for ANTs
 
-    temp_files = []
     temp_warp_file = None
     temp_inverse_warp_file = None
     temp_parc_file = None
@@ -321,6 +366,8 @@ def lamareg(
 
             if verbose:
                 cmd.append("--verbose")
+            
+            print("Running command: " + " ".join(cmd))
             subprocess.run(cmd, check=True, env=env)
             if not disable_robust:
                 print(
@@ -344,7 +391,7 @@ def lamareg(
                     "--reg-iterations",
                     "10, 20",
                 ]
-                if inverse_warp_file or not skip_qc:
+                if inverse_warp_file:
                     if not inverse_secondary_warp_file:
                         robust_cmd.extend(["--initial-inverse-warp-file", temp_inverse_warp_file])
                     else:
@@ -371,6 +418,9 @@ def lamareg(
                         robust_cmd.extend(["--inverse-warp-file", inverse_warp_file])
                 if verbose:
                     robust_cmd.append("--verbose")
+                if compose:
+                    robust_cmd.append("--compose-warps")
+                print("Running command: " + " ".join(robust_cmd))
                 subprocess.run(robust_cmd, check=True, env=env)
                 try:
                     if temp_warp_file and os.path.exists(temp_warp_file):
@@ -518,20 +568,20 @@ def main():
         action="store_true",
         help="Skip generating moving parcellation",
     )
-    parser.add_argument("--output", help="Output registered image")
+    parser.add_argument("--output", required=True, help="Output registered image")
     parser.add_argument(
-        "--moving-parc", required=True, help="Path for moving image parcellation"
+        "--moving-parc", help="Path for moving image parcellation"
     )
     parser.add_argument(
-        "--fixed-parc", required=True, help="Path for fixed image parcellation"
+        "--fixed-parc", help="Path for fixed image parcellation"
     )
     parser.add_argument(
-        "--registered-parc", required=True, help="Path for registered parcellation"
+        "--registered-parc", help="Path for registered parcellation"
     )
     parser.add_argument(
-        "--affine", required=True, help="Path for affine transformation"
+        "--affine", help="Path for affine transformation"
     )
-    parser.add_argument("--warpfield", required=True, help="Path for warp field")
+    parser.add_argument("--warpfield", help="Path for warp field")
     parser.add_argument("--inverse-warpfield", help="Path for inverse warp field")
     parser.add_argument(
         "--generate-warpfield",
@@ -565,6 +615,7 @@ def main():
     parser.add_argument("--disable-robust", action="store_true", help="Disable robust second-stage registration")
     parser.add_argument("--inverse", action="store_true", help="Whether to reverse the order of the transforms (warpfield first, then affine)")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
+    parser.add_argument("--compose", action="store_true", help="Compose warp fields instead of applying sequentially")
     args = parser.parse_args()
 
     # Validate arguments based on workflow
@@ -604,7 +655,8 @@ def main():
         inverse=args.inverse,
         secondary_warp_file=args.secondary_warpfield,
         inverse_secondary_warp_file=args.inverse_secondary_warpfield,
-        verbose=args.verbose
+        verbose=args.verbose,
+        compose=args.compose
     )
 
 
