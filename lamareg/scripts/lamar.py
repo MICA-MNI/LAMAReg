@@ -111,7 +111,7 @@ def lamareg(
                     raise ValueError(
                         "Secondary warp field file path is required when not composing warp fields. Provide --secondary-warpfield."
                     )
-                if inverse_secondary_warp_file is None:
+                if inverse_secondary_warp_file is None and inverse_warp_file is not None:
                     raise ValueError(
                         "Inverse secondary warp field file path is required when not composing warp fields. Provide --inverse-secondary-warpfield."
                     )
