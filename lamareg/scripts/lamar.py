@@ -418,8 +418,6 @@ def lamareg(
                         robust_cmd.extend(["--inverse-warp-file", inverse_warp_file])
                 if verbose:
                     robust_cmd.append("--verbose")
-                if compose:
-                    robust_cmd.append("--compose-warps")
                 print("Running command: " + " ".join(robust_cmd))
                 subprocess.run(robust_cmd, check=True, env=env)
                 try:
