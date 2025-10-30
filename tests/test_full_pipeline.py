@@ -133,6 +133,7 @@ def test_full_pipeline(quick=False):
         "1",  # Lower thread count for CI
         "--ants-threads",
         "1",  # Lower thread count for CI
+        "--compose"
     ]
 
     print("\nRunning LaMAR pipeline...")
