@@ -76,28 +76,31 @@ lamareg dice-compare [options]  # Calculate Dice similarity coefficient
 - `--moving PATH` : Input image to be registered
 - `--fixed PATH` : Reference image (target space)
 - `--output PATH` : Output registered image
-- `--moving-parc PATH` : Path for moving image parcellation
-- `--fixed-parc PATH` : Path for fixed image parcellation
-- `--registered-parc PATH` : Path for registered parcellation
-- `--affine PATH` : Path for affine transformation
-- `--warpfield PATH` : Path for warp field
 
 #### Optional Arguments:
+- `--moving-parc PATH` : Path for moving image parcellation (temp file if omitted)
+- `--fixed-parc PATH` : Path for fixed image parcellation (temp file if omitted)
+- `--registered-parc PATH` : Path for registered parcellation (temp file if omitted)
+- `--affine PATH` : Path for affine transform (temp file if omitted)
+- `--warpfield PATH` : Path for primary warpfield (temp file if omitted)
+- `--inverse-warpfield PATH` : Path for inverse primary warpfield
+- `--secondary-warpfield PATH` : Output path for robust stage warpfield (requires `--compose` off)
+- `--inverse-secondary-warpfield PATH` : Output path for inverse robust warpfield (requires `--compose` off)
+- `--compose` : Compose primary and secondary warpfields into a single output warpfield
 - `--registration-method STR` : Registration method (default: SyNRA)
-- `--synthseg-threads N` : SynthSeg threads (default: 1)
-- `--ants-threads N` : ANTs threads (default: 1)
-- `--qc-csv PATH` : Path for QC Dice score CSV file
-- `--inverse-warpfield PATH` : Path for inverse warp field
+- `--synthseg-threads N` : SynthSeg threads (default: all cores)
+- `--ants-threads N` : ANTs threads (default: all cores)
+- `--qc-csv PATH` : Path for QC Dice score CSV (required to enable QC; omit to skip automatically)
 - `--skip-fixed-parc` : Skip fixed image parcellation if it already exists
 - `--skip-moving-parc` : Skip moving image parcellation if it already exists
 - `--skip-qc` : Skip quality control metrics calculation
 - `--disable-robust` : Disable two-stage robust registration
-- `--secondary-warpfield PATH` : Disables warpfield composition for forward warps, specifies path to save the secondary warpfield
-- `--inverse-secondary-warpfield PATH` : Disables warpfield composition for forward warps, specifies path to save the secondary inverse warpfield
+- `--verbose` : Enable verbose output
+- Providing exactly one warpfield (forward or inverse) without `--compose` is invalid.
 
 ### ANTs Registration Parameters
 
-When using `coregister` directly, additional ANTs parameters are available:
+When using `coregister` directly, additional ANts parameters are available:
 
 - `--verbose` : Enable verbose output
 - `--grad-step FLOAT` : Gradient step size (default: 0.2)
@@ -170,7 +173,7 @@ When using robust mode (default), LAMAReg performs a two-stage registration:
    - Total transform = `primary_warp` ∘ `secondary_warp`
 
 #### Important Note:
-Warpfield composition results in some small losses in precision due to an extra interpolation step, specify a secondary warpfield path if you need highly accurate warpfields. This will **NOT** impact the quality of the registered image provided by LAMAReg, but will result in minor degradations in quality when re-using the warpfields.
+Warpfield composition results in small interpolation losses; leave `--compose` unset and capture both warpfields if you plan to reuse them separately.
 
 ## Argument Parsing Logic
 
@@ -298,6 +301,8 @@ LAMAReg/
   1. Register parcellations (contrast-agnostic)
   2. Fine-tune with a second direct registration using the first result as initialization
 - For reproducible results, you can set a random seed when using the coregister command directly
+- Temporary filenames are created automatically when optional outputs (parcellations, transforms) are omitted.
+- Dice-based QC runs only when `--qc-csv` is provided; omitting it skips QC without needing `--skip-qc`.
 
 ## References
 
