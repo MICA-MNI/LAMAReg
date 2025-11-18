@@ -715,9 +715,6 @@ def main():
     # Process tuple arguments from strings
     kwargs = {}
 
-    if args.verbose:
-        kwargs["verbose"] = True
-
     # Add standard numeric parameters
     for param in [
         "grad_step",
