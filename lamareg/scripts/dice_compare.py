@@ -138,7 +138,8 @@ def compare_parcellations_dice(parc1_path, parc2_path, output_csv_path, verbose=
             mask2 = (parc2 == label)
             dice = dice_score(mask1, mask2)
             region = FREESURFER_LABELS.get(label, "Unknown Region")
-            print(f"{label:<8}{region:<40}{dice:.4f}")
+            if verbose:
+                print(f"{label:<8}{region:<40}{dice:.4f}")
             writer.writerow([label, region, f"{dice:.4f}"])
 
     print(f"\nDice scores with region names saved to: {output_csv_path}")
