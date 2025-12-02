@@ -129,9 +129,7 @@ def test_full_pipeline(quick=False):
         inverse_warp,
         "--qc-csv",
         qc_csv,
-        "--synthseg-threads",
-        "1",  # Lower thread count for CI
-        "--ants-threads",
+        "--threads",
         "1",  # Lower thread count for CI
         "--compose",
         "--verbose"

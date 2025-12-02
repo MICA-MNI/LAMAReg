@@ -79,8 +79,7 @@ def print_cli_help():
       {YELLOW}--inverse-secondary-warpfield{RESET} PATH : Path for inverse robust warp (requires --compose off)
       {YELLOW}--compose{RESET}             : Compose primary and secondary warps into one output
       {YELLOW}--registration-method{RESET} STR       : Registration method (default: SyNRA)
-      {YELLOW}--synthseg-threads{RESET} N            : SynthSeg threads (default: all cores)
-      {YELLOW}--ants-threads{RESET} N                : ANTs threads (default: all cores)
+      {YELLOW}--threads{RESET} N                : Number of threads to use (default: all cores)
       {YELLOW}--qc-csv{RESET} PATH                   : Path for QC Dice score CSV (required to run QC; omit to skip)
       {YELLOW}--skip-fixed-parc{RESET}               : Skip fixed image parcellation
       {YELLOW}--skip-moving-parc{RESET}              : Skip moving image parcellation
@@ -104,7 +103,7 @@ def print_cli_help():
       {YELLOW}--affine{RESET} PATH      : Affine transform (.mat)
 
     {BLUE}# Optional Arguments:{RESET}
-      {YELLOW}--ants-threads{RESET} N         : ANTs threads (default: all cores)
+      {YELLOW}--threads{RESET} N         : Number of threads to use (default: all cores)
       {YELLOW}--secondary-warpfield{RESET} PATH : Path to secondary warp (for robust mode)
       {YELLOW}--inverse{RESET}                 : Invert transform order (warp then affine)
 
@@ -123,7 +122,7 @@ def print_cli_help():
       {YELLOW}--secondary-warpfield{RESET} dwi_to_T1w_secondary_warp.nii.gz \\
       {YELLOW}--inverse-warpfield{RESET} T1w_to_dwi_warp.nii.gz \\
       {YELLOW}--inverse-secondary-warpfield{RESET} T1w_to_dwi_secondary_warp.nii.gz \\
-      {YELLOW}--synthseg-threads{RESET} 4 {YELLOW}--ants-threads{RESET} 8
+      {YELLOW}--threads{RESET} 4 
       
     {BLUE}# Single-stage registration (faster, less accurate):{RESET}
     lamar {GREEN}register{RESET} \\
@@ -189,8 +188,6 @@ def print_cli_help():
     
     {BLUE}PERFORMANCE:{RESET}
     • Default threads: Uses all available CPU cores
-    • SynthSeg is typically faster with fewer threads (1-4)
-    • ANTs registration benefits from more threads (8-16)
     • Robust mode takes ~2x longer but provides better accuracy
     
     {BLUE}OUTPUT FILES:{RESET}
@@ -271,16 +268,10 @@ def main():
         help="Registration method (default: SyNRA)",
     )
     register_parser.add_argument(
-        "--synthseg-threads",
+        "--threads",
         type=int,
         default=DEFAULT_THREADS,
-        help="Number of threads to use for SynthSeg segmentation (default: 1)",
-    )
-    register_parser.add_argument(
-        "--ants-threads",
-        type=int,
-        default=DEFAULT_THREADS,
-        help="Number of threads to use for ANTs registration (default: 1)",
+        help="Number of threads to use for registration (default: all cores)",
     )
     register_parser.add_argument(
         "--qc-csv", help="Path for QC Dice score CSV (required to enable QC; omit to skip)"
@@ -499,8 +490,7 @@ def main():
             inverse_warp_file=args.inverse_warpfield,
             compose=args.compose,
             registration_method=args.registration_method,
-            synthseg_threads=args.synthseg_threads,
-            ants_threads=args.ants_threads,
+            threads=args.threads,
             skip_fixed_parc=args.skip_fixed_parc,
             skip_moving_parc=args.skip_moving_parc,
             skip_qc=args.skip_qc,
@@ -526,8 +516,7 @@ def main():
             generate_warpfield=True,
             compose=args.compose,
             registration_method=args.registration_method,
-            synthseg_threads=args.synthseg_threads,
-            ants_threads=args.ants_threads,
+            threads=args.threads,
             skip_fixed_parc=args.skip_fixed_parc,
             skip_moving_parc=args.skip_moving_parc,
             skip_qc=args.skip_qc,
@@ -547,9 +536,8 @@ def main():
             affine_file=args.affine,
             warp_file=args.warpfield,
             secondary_warp_file=args.secondary_warpfield,
-            ants_threads=args.ants_threads,
+            threads=args.threads,
             inverse=args.inverse,
-            synthseg_threads=1,  # Not used in this workflow but needed for the function
             verbose=args.verbose
         )
     elif args.command == "synthseg":

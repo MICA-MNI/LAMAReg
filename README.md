@@ -88,8 +88,7 @@ lamareg dice-compare [options]  # Calculate Dice similarity coefficient
 - `--inverse-secondary-warpfield PATH` : Output path for inverse robust warpfield (requires `--compose` off)
 - `--compose` : Compose primary and secondary warpfields into a single output warpfield
 - `--registration-method STR` : Registration method (default: SyNRA)
-- `--synthseg-threads N` : SynthSeg threads (default: all cores)
-- `--ants-threads N` : ANTs threads (default: all cores)
+- `--threads N` : threads (default: all cores)
 - `--qc-csv PATH` : Path for QC Dice score CSV (required to enable QC; omit to skip automatically)
 - `--skip-fixed-parc` : Skip fixed image parcellation if it already exists
 - `--skip-moving-parc` : Skip moving image parcellation if it already exists
@@ -133,7 +132,7 @@ Same arguments as full registration, but without `--output`
 
 
 #### Optional Arguments:
-- `--ants-threads N` : ANTs threads (default: 1)
+- `--threads N` : threads (default: All)
 - `--affine PATH` : Path to affine transformation
 - `--warpfield PATH` : Path to warp field
 - `--secondary-warpfield PATH` : Path to secondary warp field
@@ -196,7 +195,7 @@ lamareg register --moving example_data/sub-HC001_ses-02_space-dwi_desc-b0.nii.gz
   --output output/sub-001_dwi_in_T1w.nii.gz --moving-parc output/sub-001_dwi_parc.nii.gz \
   --fixed-parc output/sub-001_T1w_parc.nii.gz --registered-parc output/sub-001_dwi_reg_parc.nii.gz \
   --affine output/dwi_to_T1w_affine.mat --warpfield output/dwi_to_T1w_warp.nii.gz \
-  --inverse-warpfield output/T1w_to_dwi_warp.nii.gz --synthseg-threads 4 --ants-threads 8
+  --inverse-warpfield output/T1w_to_dwi_warp.nii.gz --threads 4 
 ```
 
 ### Register without robust two-stage approach:

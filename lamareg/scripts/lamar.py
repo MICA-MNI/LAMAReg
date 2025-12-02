@@ -15,10 +15,14 @@ registration might fail.
 
 import os
 import argparse
-import subprocess
 import sys
 import multiprocessing
 import tempfile
+import ants
+from lamareg.scripts.synthseg import main as synthseg_main
+from lamareg.scripts.coregister import ants_linear_nonlinear_registration
+from lamareg.scripts.apply_warp import apply_warp
+
 DEFAULT_THREADS = multiprocessing.cpu_count()
 
 def lamareg(
@@ -34,8 +38,7 @@ def lamareg(
     affine_file=None,
     warp_file=None,
     inverse_warp_file=None,
-    synthseg_threads=DEFAULT_THREADS,
-    ants_threads=DEFAULT_THREADS,
+    threads=DEFAULT_THREADS,
     qc_csv=None,
     skip_fixed_parc=False,
     skip_moving_parc=False,
@@ -64,12 +67,8 @@ def lamareg(
             raise FileNotFoundError(f"Input file not found: {input_file}")
 
     # Validate thread counts
-    if synthseg_threads < 1:
-        raise ValueError(
-            f"Invalid thread count for SynthSeg: {synthseg_threads}. Must be >= 1"
-        )
-    if ants_threads < 1:
-        raise ValueError(f"Invalid thread count for ANTs: {ants_threads}. Must be >= 1")
+    if threads < 1:
+        threads = DEFAULT_THREADS
     # Workflow-specific validation
     if not apply_warpfield:
         # Registration or Generate-warpfield workflow
@@ -231,17 +230,14 @@ def lamareg(
     print(f"Processing input image: {input_image}")
     print(f"Reference image: {reference_image}")
     print(
-        f"Using {synthseg_threads} thread(s) for SynthSeg and {ants_threads} thread(s) for ANTs"
+        f"Using {threads} thread(s)."
     )
 
-    # Create environment with suppressed TensorFlow warnings
-    env = os.environ.copy()
-    env["TF_CPP_MIN_LOG_LEVEL"] = "3"  # 0=ALL, 1=INFO, 2=WARNING, 3=ERROR
-    env["PYTHONWARNINGS"] = "ignore"
-
-    # Set ANTs/ITK thread count
-    env["ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS"] = str(ants_threads)
-    env["OMP_NUM_THREADS"] = str(ants_threads)  # OpenMP threads for ANTs
+    # Set environment variables directly
+    os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # 0=ALL, 1=INFO, 2=WARNING, 3=ERROR
+    os.environ["PYTHONWARNINGS"] = "ignore"
+    os.environ["ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS"] = str(threads)
+    os.environ["OMP_NUM_THREADS"] = str(threads)
 
     temp_warp_file = None
     temp_inverse_warp_file = None
@@ -253,23 +249,23 @@ def lamareg(
             # Step 1: Generate parcellations with SynthSeg if needed
             if not skip_moving_parc:
                 print("\n--- Step 1.1: Generating parcellation for input image ---")
-                subprocess.run(
-                    [
-                        "lamareg",
-                        "synthseg",
-                        "--i",
-                        input_image,
-                        "--o",
-                        input_parc,
-                        "--parc",
-                        "--cpu",
-                        "--robust",
-                        "--threads",
-                        str(synthseg_threads),  # Use SynthSeg threads
-                    ],
-                    check=True,
-                    env=env,
-                )
+                synthseg_args = {
+                    "i": input_image,
+                    "o": input_parc,
+                    "parc": True,
+                    "robust": True,
+                    "fast": False,
+                    "cpu": True,
+                    "threads": threads,
+                    "v1": False,
+                    "ct": False,
+                    "vol": None,
+                    "qc": None,
+                    "post": None,
+                    "resample": None,
+                    "crop": None
+                }
+                synthseg_main(synthseg_args)
             else:
                 print(
                     f"Skipping parcellation generation for input image: {input_image}"
@@ -283,23 +279,23 @@ def lamareg(
 
             if not skip_fixed_parc:
                 print("\n--- Step 1.2: Generating parcellation for reference image ---")
-                subprocess.run(
-                    [
-                        "lamareg",
-                        "synthseg",
-                        "--i",
-                        reference_image,
-                        "--o",
-                        reference_parc,
-                        "--parc",
-                        "--cpu",
-                        "--robust",
-                        "--threads",
-                        str(synthseg_threads),  # Use SynthSeg threads
-                    ],
-                    check=True,
-                    env=env,
-                )
+                synthseg_args = {
+                    "i": reference_image,
+                    "o": reference_parc,
+                    "parc": True,
+                    "robust": True,
+                    "fast": False,
+                    "cpu": True,
+                    "threads": threads,
+                    "v1": False,
+                    "ct": False,
+                    "vol": None,
+                    "qc": None,
+                    "post": None,
+                    "resample": None,
+                    "crop": None
+                }
+                synthseg_main(synthseg_args)
             else:
                 print(
                     f"Skipping parcellation generation for reference image: {reference_image}"
@@ -313,113 +309,106 @@ def lamareg(
 
             # Step 2: Register parcellations using coregister
             print("\n--- Step 2: Coregistering parcellated images ---")
-            cmd = [
-                "lamareg",
-                "coregister",
-                "--fixed",
-                reference_parc,
-                "--moving",
-                input_parc,
-                "--registration-method",
-                registration_method,
-                "--fixed-image",
-                reference_image,
-            ]
-
-            if output_parc is not None:
-                if not disable_robust:
-                    with tempfile.NamedTemporaryFile(suffix="_tmp_output_parc.nii.gz", delete=False) as tmp_parc:
-                        temp_parc_file = tmp_parc.name
-                    temp_files.append(temp_parc_file)
-                    cmd.extend(["--output", temp_parc_file])
-                else:
-                    cmd.extend(["--output", output_parc])
-
-
-            # Only include transform file flags if paths were provided
-            if affine_file:
-                cmd.extend(["--affine-file", affine_file])
-
+            
+            # Determine output file
+            current_out_file = output_parc
+            if not disable_robust:
+                 with tempfile.NamedTemporaryFile(suffix="_tmp_output_parc.nii.gz", delete=False) as tmp_parc:
+                    temp_parc_file = tmp_parc.name
+                 temp_files.append(temp_parc_file)
+                 current_out_file = temp_parc_file
+            
+            # Determine warp file
+            current_warp_file = None
             if warp_file:
                 if not disable_robust:
                     if not secondary_warp_file:
                         with tempfile.NamedTemporaryFile(suffix="_tmp_warp.nii.gz", delete=False) as tmp_warp:
                             temp_warp_file = tmp_warp.name
                         temp_files.append(temp_warp_file)
-                        cmd.extend(["--warp-file", temp_warp_file])
+                        current_warp_file = temp_warp_file
                     else:
-                        cmd.extend(["--warp-file", warp_file])
+                        current_warp_file = warp_file
                 else:
-                    cmd.extend(["--warp-file", warp_file])
+                    current_warp_file = warp_file
 
+            # Determine inverse warp file
+            current_rev_warp_file = None
             if inverse_warp_file:
                 if not disable_robust:
                     if not inverse_secondary_warp_file:
                         with tempfile.NamedTemporaryFile(suffix="_tmp_inverse_warp.nii.gz", delete=False) as tmp_inverse_warp:
                             temp_inverse_warp_file = tmp_inverse_warp.name
                         temp_files.append(temp_inverse_warp_file)
-                        cmd.extend(["--inverse-warp-file", temp_inverse_warp_file])
+                        current_rev_warp_file = temp_inverse_warp_file
                     else:
-                        cmd.extend(["--inverse-warp-file", inverse_warp_file])
+                        current_rev_warp_file = inverse_warp_file
                 else:
-                    cmd.extend(["--inverse-warp-file", inverse_warp_file])
+                    current_rev_warp_file = inverse_warp_file
 
-            if verbose:
-                cmd.append("--verbose")
-            
-            print("Running command: " + " ".join(cmd))
-            subprocess.run(cmd, check=True, env=env)
+            ants_linear_nonlinear_registration(
+                fixed_file=reference_parc,
+                moving_file=input_parc,
+                out_file=current_out_file,
+                registration_method=registration_method,
+                fixed_image=reference_image,
+                affine_file=affine_file,
+                warp_file=current_warp_file,
+                rev_warp_file=current_rev_warp_file,
+                verbose=verbose,
+                threads=threads
+            )
+
             if not disable_robust:
                 print(
                     "\n--- Step 2.1: Running robust registration for improved accuracy ---"
                 )
-                robust_cmd = [
-                    "lamareg",
-                    "coregister",
-                    "--fixed",
-                    reference_image,
-                    "--moving",
-                    input_image,
-                    "--interpolator",
-                    "linear",
-                    "--registration-method",
-                    "SyNOnly",
-                    "--initial-affine-file",
-                    affine_file,
-                    "--initial-warp-file",
-                    temp_warp_file if not secondary_warp_file else warp_file,
-                    "--reg-iterations",
-                    "10, 20",
-                ]
+                
+                current_initial_warp = temp_warp_file if not secondary_warp_file else warp_file
+                current_initial_inverse_warp = None
                 if inverse_warp_file:
                     if not inverse_secondary_warp_file:
-                        robust_cmd.extend(["--initial-inverse-warp-file", temp_inverse_warp_file])
+                        current_initial_inverse_warp = temp_inverse_warp_file
                     else:
-                        robust_cmd.extend(["--initial-inverse-warp-file", inverse_warp_file])
-                if output_image is not None:
-                    robust_cmd.extend(["--output", output_image])
-
-                # Only include transform file flags if paths were provided
-                if affine_file or not skip_qc:
-                    robust_cmd.extend(["--affine-file", affine_file])
-
+                        current_initial_inverse_warp = inverse_warp_file
+                
+                current_warp_file = None
+                disable_warp_comp = False
                 if warp_file or not skip_qc:
                     if secondary_warp_file:
-                        robust_cmd.extend(["--warp-file", secondary_warp_file])
-                        robust_cmd.extend(["--disable-warp-composition"])
+                        current_warp_file = secondary_warp_file
+                        disable_warp_comp = True
                     else:
-                        robust_cmd.extend(["--warp-file", warp_file])
-
+                        current_warp_file = warp_file
+                
+                current_rev_warp_file = None
+                disable_inv_warp_comp = False
                 if inverse_warp_file:
                     if inverse_secondary_warp_file:
-                        robust_cmd.extend(["--inverse-warp-file", inverse_secondary_warp_file])
-                        robust_cmd.extend(["--disable-inverse-warp-composition"])
+                        current_rev_warp_file = inverse_secondary_warp_file
+                        disable_inv_warp_comp = True
                     else:
-                        robust_cmd.extend(["--inverse-warp-file", inverse_warp_file])
-                if verbose:
-                    robust_cmd.append("--verbose")
-                print("Running command: " + " ".join(robust_cmd))
-                subprocess.run(robust_cmd, check=True, env=env)
+                        current_rev_warp_file = inverse_warp_file
+
+                ants_linear_nonlinear_registration(
+                    fixed_file=reference_image,
+                    moving_file=input_image,
+                    interpolator="linear",
+                    registration_method="SyNOnly",
+                    initial_affine_file=affine_file,
+                    initial_warp_file=current_initial_warp,
+                    reg_iterations=(10, 20),
+                    initial_inverse_warp_file=current_initial_inverse_warp,
+                    out_file=output_image,
+                    affine_file=affine_file if (affine_file or not skip_qc) else None,
+                    warp_file=current_warp_file,
+                    rev_warp_file=current_rev_warp_file,
+                    disable_warp_composition=disable_warp_comp,
+                    disable_inverse_warp_composition=disable_inv_warp_comp,
+                    verbose=verbose,
+                    threads=threads
+                )
+
                 try:
                     if temp_warp_file and os.path.exists(temp_warp_file):
                         os.remove(temp_warp_file)
@@ -428,29 +417,20 @@ def lamareg(
                 except OSError:
                     pass
 
-                apply_cmd = [
-                    "lamareg",
-                    "apply-warp",  # Use hyphen instead of underscore
-                    "--moving",
-                    input_parc,
-                    "--fixed",  # Changed from --reference to --fixed
-                    reference_image,
-                    "--output",
-                    output_parc, 
-                    "--interpolation",
-                    "nearestNeighbor",
-                ]
+                # Apply warp to parcellation
+                moving_img = ants.image_read(input_parc)
+                reference_img = ants.image_read(reference_image)
                 
-                # Only include transform file flags if files were provided
-                apply_cmd.extend(["--affine", affine_file])
-                    
-                apply_cmd.extend(["--warp", warp_file])
-
-                if secondary_warp_file:
-                    apply_cmd.extend(["--secondary-warp", secondary_warp_file])
-                if verbose:
-                    apply_cmd.append("--verbose")
-                subprocess.run(apply_cmd, check=True, env=env)
+                apply_warp(
+                    moving_img=moving_img,
+                    reference_img=reference_img,
+                    affine_file=affine_file,
+                    warp_file=warp_file,
+                    out_file=output_parc,
+                    interpolation="nearestNeighbor",
+                    secondary_warp=secondary_warp_file,
+                    verbose=verbose
+                )
                     
             # Run Dice evaluation after coregistration
             if not skip_qc:
@@ -497,32 +477,20 @@ def lamareg(
             print(
                 "\n--- Step 4: Applying transformation to original input image ---"
             )
-            apply_cmd = [
-                "lamareg",
-                "apply-warp",  # Use hyphen instead of underscore
-                "--moving",
-                input_image,
-                "--fixed",  # Changed from --reference to --fixed
-                reference_image,
-                "--output",
-                output_image, 
-            ]
-
-            # Only include transform file flags if files were provided
-            if affine_file:
-                apply_cmd.extend(["--affine", affine_file])
-
-            if warp_file:
-                apply_cmd.extend(["--warp", warp_file])
             
-            if secondary_warp_file:
-                apply_cmd.extend(["--secondary-warp", secondary_warp_file])
+            moving_img = ants.image_read(input_image)
+            reference_img = ants.image_read(reference_image)
 
-            if inverse:
-                apply_cmd.extend(["--inverse"])
-            if verbose:
-                apply_cmd.append("--verbose")
-            subprocess.run(apply_cmd, check=True, env=env)
+            apply_warp(
+                moving_img=moving_img,
+                reference_img=reference_img,
+                affine_file=affine_file,
+                warp_file=warp_file,
+                out_file=output_image,
+                secondary_warp=secondary_warp_file,
+                inverse=inverse,
+                verbose=verbose
+            )
 
             print(f"\nSuccess! Registered image saved to: {output_image}")
         elif generate_warpfield:
@@ -533,7 +501,7 @@ def lamareg(
                 success_msg += f"\nAffine transformation saved at: {affine_file}"
             print(success_msg)
 
-    except subprocess.CalledProcessError as e:
+    except Exception as e:
         print(f"Error during processing: {e}", file=sys.stderr)
         sys.exit(1)
     finally:
@@ -595,17 +563,12 @@ def main():
         "--registration-method", default="SyNRA", help="Registration method"
     )
     parser.add_argument(
-        "--synthseg-threads",
+        "--threads",
         type=int,
         default=DEFAULT_THREADS,
-        help="Number of threads to use for SynthSeg segmentation",
+        help="Number of threads to use for processing",
     )
-    parser.add_argument(
-        "--ants-threads",
-        type=int,
-        default=DEFAULT_THREADS,
-        help="Number of threads to use for ANTs registration",
-    )
+
     parser.add_argument("--secondary-warpfield", help="Path for secondary warp field (for robust registration)")
     parser.add_argument("--inverse-secondary-warpfield", help="Path for inverse of secondary warp field (for robust registration)")
     parser.add_argument("--qc-csv", help="Path for quality control Dice score CSV file")
@@ -643,8 +606,7 @@ def main():
         affine_file=args.affine,
         warp_file=args.warpfield,
         inverse_warp_file=args.inverse_warpfield,
-        synthseg_threads=args.synthseg_threads,
-        ants_threads=args.ants_threads,
+        threads=args.threads,
         qc_csv=args.qc_csv,
         skip_fixed_parc=args.skip_fixed_parc,
         skip_moving_parc=args.skip_moving_parc,
