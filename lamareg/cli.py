@@ -354,16 +354,10 @@ def main():
         help="Registration method (default: SyNRA)",
     )
     warpfield_parser.add_argument(
-        "--synthseg-threads",
+        "--threads",
         type=int,
         default=DEFAULT_THREADS,
-        help="Number of threads to use for SynthSeg segmentation (default: 1)",
-    )
-    warpfield_parser.add_argument(
-        "--ants-threads",
-        type=int,
-        default=DEFAULT_THREADS,
-        help="Number of threads to use for ANTs registration (default: 1)",
+        help="Number of threads to use for registration (default: all cores)",
     )
     warpfield_parser.add_argument(
         "--qc-csv", help="Path for QC Dice score CSV (required to enable QC; omit to skip)"
@@ -401,10 +395,10 @@ def main():
         "--affine", required=True, help="Path to affine transformation"
     )
     apply_parser.add_argument(
-        "--ants-threads",
+        "--threads",
         type=int,
         default=DEFAULT_THREADS,
-        help="Number of threads to use for ANTs transformation (default: 1)",
+        help="Number of threads to use for transformation (default: all cores)",
     )
     apply_parser.add_argument(
         "--inverse",
