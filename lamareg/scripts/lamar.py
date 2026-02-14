@@ -399,7 +399,7 @@ def lamareg(
                     initial_warp_file=current_initial_warp,
                     reg_iterations=(10, 20),
                     initial_inverse_warp_file=current_initial_inverse_warp,
-                    out_file=output_image,
+                    out_file=None, # Changed from output_image to None to prevent blurred output
                     affine_file=affine_file if (affine_file or not skip_qc) else None,
                     warp_file=current_warp_file,
                     rev_warp_file=current_rev_warp_file,
@@ -473,7 +473,9 @@ def lamareg(
                     )
 
         # WORKFLOW 1 & 3: Apply transformation to the original input image
-        if not generate_warpfield and output_image is not None and (disable_robust or apply_warpfield):
+        # Run this step for ALL registration cases if an output image is requested
+        # Previously this was restricted: (disable_robust or apply_warpfield)
+        if not generate_warpfield and output_image is not None:
             print(
                 "\n--- Step 4: Applying transformation to original input image ---"
             )
