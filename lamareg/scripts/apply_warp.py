@@ -1,7 +1,7 @@
 """
 apply_warp - Image registration transformation application
 
-Part of the LAMAR processing pipeline for neuroimaging data.
+Part of the LAMAReg processing pipeline for neuroimaging data.
 
 This module applies spatial transformations to register images from one space to another
 using both affine and non-linear (warp field) transformations. It's commonly used to:
@@ -24,7 +24,7 @@ Therefore, to achieve moving → warp → affine, we provide [warp, affine] to A
 
 Robust Mode (Two Warpfields):
 -----------------------------
-When using LAMAR's robust registration mode, you'll have two warpfields:
+When using LAMAReg's robust registration mode, you'll have two warpfields:
 1. Primary warpfield: From parcellation-based registration (coarse alignment)
 2. Secondary warpfield: From direct image registration (fine-tuning)
 
@@ -35,7 +35,7 @@ The composition order is: moving → secondary → primary → affine → fixed
 
 API Usage:
 ---------
-lamar apply-warp \\
+lamareg apply-warp \\
     --moving <path/to/source_image.nii.gz> \\
     --fixed <path/to/target_space.nii.gz> \\
     --affine <path/to/transform.mat> \\
@@ -64,7 +64,7 @@ Python Usage:
 Examples:
 --------
 # Apply single warpfield + affine (single-stage registration):
-lamar apply-warp \\
+lamareg apply-warp \\
     --moving subject_flair.nii.gz \\
     --fixed subject_t1w.nii.gz \\
     --warp flair_to_t1w_warp.nii.gz \\
@@ -72,7 +72,7 @@ lamar apply-warp \\
     --output registered_flair.nii.gz
 
 # Apply two warpfields + affine (robust mode):
-lamar apply-warp \\
+lamareg apply-warp \\
     --moving dwi_segmentation.nii.gz \\
     --fixed T1w_reference.nii.gz \\
     --warp dwi_to_T1w_primary_warp.nii.gz \\
@@ -81,7 +81,7 @@ lamar apply-warp \\
     --output dwi_seg_in_T1w.nii.gz
 
 # Apply inverse transforms (from fixed back to moving space):
-lamar apply-warp \\
+lamareg apply-warp \\
     --moving atlas_in_T1w.nii.gz \\
     --fixed subject_dwi.nii.gz \\
     --warp T1w_to_dwi_warp.nii.gz \\
@@ -90,7 +90,7 @@ lamar apply-warp \\
     --inverse
 
 # Apply to label image (use nearest neighbor interpolation):
-lamar apply-warp \\
+lamareg apply-warp \\
     --moving segmentation.nii.gz \\
     --fixed mni152.nii.gz \\
     --warp warp.nii.gz \\
@@ -156,25 +156,25 @@ def print_help():
     {CYAN}{BOLD}────────────────────────── EXAMPLE USAGE ──────────────────────────{RESET}
     
     {BLUE}# Single-stage registration (warp + affine):{RESET}
-    lamar {GREEN}apply-warp{RESET} {YELLOW}--moving{RESET} subject_flair.nii.gz {YELLOW}--fixed{RESET} subject_t1w.nii.gz \\
+    lamareg {GREEN}apply-warp{RESET} {YELLOW}--moving{RESET} subject_flair.nii.gz {YELLOW}--fixed{RESET} subject_t1w.nii.gz \\
       {YELLOW}--warp{RESET} flair_to_t1w_warp.nii.gz {YELLOW}--affine{RESET} flair_to_t1w_affine.mat \\
       {YELLOW}--output{RESET} registered_flair.nii.gz
     
     {BLUE}# Robust mode (two warpfields + affine):{RESET}
-    lamar {GREEN}apply-warp{RESET} {YELLOW}--moving{RESET} dwi.nii.gz {YELLOW}--fixed{RESET} T1w.nii.gz \\
+    lamareg {GREEN}apply-warp{RESET} {YELLOW}--moving{RESET} dwi.nii.gz {YELLOW}--fixed{RESET} T1w.nii.gz \\
       {YELLOW}--warp{RESET} dwi_to_T1w_primary.nii.gz \\
       {YELLOW}--secondary-warp{RESET} dwi_to_T1w_secondary.nii.gz \\
       {YELLOW}--affine{RESET} dwi_to_T1w_affine.mat \\
       {YELLOW}--output{RESET} dwi_in_T1w.nii.gz
     
     {BLUE}# Apply to segmentation (nearest neighbor interpolation):{RESET}
-    lamar {GREEN}apply-warp{RESET} {YELLOW}--moving{RESET} parcellation.nii.gz {YELLOW}--fixed{RESET} mni152.nii.gz \\
+    lamareg {GREEN}apply-warp{RESET} {YELLOW}--moving{RESET} parcellation.nii.gz {YELLOW}--fixed{RESET} mni152.nii.gz \\
       {YELLOW}--warp{RESET} warp.nii.gz {YELLOW}--affine{RESET} affine.mat \\
       {YELLOW}--interpolation{RESET} nearestNeighbor \\
       {YELLOW}--output{RESET} parc_in_mni.nii.gz
     
     {BLUE}# Apply inverse transforms:{RESET}
-    lamar {GREEN}apply-warp{RESET} {YELLOW}--moving{RESET} atlas_in_T1w.nii.gz {YELLOW}--fixed{RESET} dwi.nii.gz \\
+    lamareg {GREEN}apply-warp{RESET} {YELLOW}--moving{RESET} atlas_in_T1w.nii.gz {YELLOW}--fixed{RESET} dwi.nii.gz \\
       {YELLOW}--warp{RESET} T1w_to_dwi_warp.nii.gz {YELLOW}--affine{RESET} T1w_to_dwi_affine.mat \\
       {YELLOW}--inverse{RESET} {YELLOW}--output{RESET} atlas_in_dwi.nii.gz
     
@@ -184,7 +184,7 @@ def print_help():
     {MAGENTA}•{RESET} For label/segmentation images, use --interpolation nearestNeighbor or multiLabel
     {MAGENTA}•{RESET} For continuous images (T1w, FLAIR, etc.), use --interpolation linear or bSpline
     {MAGENTA}•{RESET} The --inverse flag inverts the affine but applies warpfields as-is
-    {MAGENTA}•{RESET} Robust mode requires both --warp and --secondary-warp from LAMAR registration
+    {MAGENTA}•{RESET} Robust mode requires both --warp and --secondary-warp from LAMAReg registration
     """
 
     print(help_text)
