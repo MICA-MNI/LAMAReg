@@ -392,6 +392,11 @@ def main():
     apply_parser.add_argument("--output", required=True, help="Output registered image")
     apply_parser.add_argument("--warpfield", required=True, help="Path to warp field")
     apply_parser.add_argument(
+        "--secondary-warpfield",
+        default=None,
+        help="Path to secondary warp field/refinement warp for robust two-stage mode",
+    )
+    apply_parser.add_argument(
         "--affine", required=True, help="Path to affine transformation"
     )
     apply_parser.add_argument(
