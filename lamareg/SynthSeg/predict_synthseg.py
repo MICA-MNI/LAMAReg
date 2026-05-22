@@ -17,11 +17,21 @@ License.
 import os
 import sys
 import traceback
+import gc
 import numpy as np
 import tensorflow as tf
 import keras.layers as KL
 import keras.backend as K
 from keras.models import Model
+
+
+# Avoid TensorFlow pre-allocating all GPU memory when a GPU is present.
+# This reduces reserved GPU memory without changing numerical outputs.
+try:
+    for _gpu in tf.config.list_physical_devices("GPU"):
+        tf.config.experimental.set_memory_growth(_gpu, True)
+except Exception:
+    pass
 
 # project imports
 from lamareg.SynthSeg import evaluate
@@ -222,6 +232,11 @@ def predict(
                     post_patch_segmentation = net.predict(image)
                     post_patch_parcellation = qc_score = None
 
+                # free input volume before NumPy postprocessing starts
+                del image
+                del shape_input
+                need_posteriors = path_posteriors[i] is not None
+
                 # postprocessing
                 seg, posteriors, volumes = postprocess(
                     post_patch_seg=post_patch_segmentation,
@@ -236,6 +251,7 @@ def predict(
                     fast=fast,
                     topology_classes=topology_classes,
                     v1=v1,
+                    return_posteriors=need_posteriors,
                 )
 
                 # write predictions to disc
@@ -268,6 +284,11 @@ def predict(
                     write_csv(
                         path_qc_scores[i], row, unique_qc_file, labels_qc, names_qc
                     )
+
+                # drop large arrays before moving to the next subject
+                del seg, posteriors, volumes
+                del post_patch_segmentation, post_patch_parcellation, qc_score
+                gc.collect()
 
             except Exception as e:
                 list_errors.append(path_images[i])
@@ -609,6 +630,7 @@ def prepare_output_files(
     )
 
 
+
 def preprocess(
     path_image,
     ct,
@@ -674,6 +696,10 @@ def preprocess(
         im, new_min=0.0, new_max=1.0, min_percentile=0.5, max_percentile=99.5
     )
 
+    # Force float32 before padding/prediction. Some volume utilities can return float64,
+    # which doubles RAM use without improving inference accuracy.
+    im = np.asarray(im, dtype=np.float32)
+
     # pad image
     input_shape = im.shape[:n_dims]
     pad_shape = [
@@ -689,6 +715,7 @@ def preprocess(
     im, pad_idx = edit_volumes.pad_volume(
         im, padding_shape=pad_shape, return_pad_idx=True
     )
+    im = np.asarray(im, dtype=np.float32)
 
     # add batch and channel axes
     im = utils.add_axis(im, axis=[0, -1])
@@ -985,6 +1012,7 @@ def build_model(
     return net
 
 
+
 def postprocess(
     post_patch_seg,
     post_patch_parc,
@@ -998,10 +1026,18 @@ def postprocess(
     fast,
     topology_classes,
     v1,
+    return_posteriors=True,
 ):
+    """Postprocess network outputs.
+
+    Memory-saving change:
+    - When return_posteriors is False, this computes segmentation and volumes
+      without allocating the full original-space 4D posterior image.
+    - All posterior working arrays are kept in float32.
+    """
 
     # get posteriors
-    post_patch_seg = np.squeeze(post_patch_seg)
+    post_patch_seg = np.squeeze(post_patch_seg).astype(np.float32, copy=False)
     if fast | (topology_classes is None):
         post_patch_seg = edit_volumes.crop_volume_with_idx(
             post_patch_seg, pad_idx, n_dims=3, return_copy=False
@@ -1009,89 +1045,73 @@ def postprocess(
 
     # keep biggest connected component
     tmp_post_patch_seg = post_patch_seg[..., 1:]
-    post_patch_seg_mask = np.sum(tmp_post_patch_seg, axis=-1) > 0.25
+    post_patch_seg_mask = np.sum(tmp_post_patch_seg, axis=-1, dtype=np.float32) > 0.25
     post_patch_seg_mask = edit_volumes.get_largest_connected_component(
         post_patch_seg_mask
     )
-    post_patch_seg_mask = np.stack(
-        [post_patch_seg_mask] * tmp_post_patch_seg.shape[-1], axis=-1
-    )
-    tmp_post_patch_seg = edit_volumes.mask_volume(
-        tmp_post_patch_seg, mask=post_patch_seg_mask, return_copy=False
-    )
+
+    # Avoid np.stack([mask] * n_labels), which creates a large 4D boolean array.
+    tmp_post_patch_seg *= post_patch_seg_mask[..., np.newaxis]
     post_patch_seg[..., 1:] = tmp_post_patch_seg
+    del post_patch_seg_mask, tmp_post_patch_seg
 
     # reset posteriors to zero outside the largest connected component of each topological class
     if (not fast) & (topology_classes is not None):
-        post_patch_seg_mask = post_patch_seg > 0.25
         for topology_class in np.unique(topology_classes)[1:]:
             tmp_topology_indices = np.where(topology_classes == topology_class)[0]
-            tmp_mask = np.any(post_patch_seg_mask[..., tmp_topology_indices], axis=-1)
+
+            # Build a 3D mask incrementally instead of materializing a full 4D threshold mask.
+            tmp_mask = np.zeros(post_patch_seg.shape[:3], dtype=bool)
+            for idx in tmp_topology_indices:
+                np.logical_or(tmp_mask, post_patch_seg[..., idx] > 0.25, out=tmp_mask)
+
             tmp_mask = edit_volumes.get_largest_connected_component(tmp_mask)
             for idx in tmp_topology_indices:
                 post_patch_seg[..., idx] *= tmp_mask
+
         post_patch_seg = edit_volumes.crop_volume_with_idx(
             post_patch_seg, pad_idx, n_dims=3, return_copy=False
         )
     else:
-        post_patch_seg_mask = post_patch_seg > 0.2
-        post_patch_seg[..., 1:] *= post_patch_seg_mask[..., 1:]
+        # Avoid thresholding the background channel and avoid a full n-label temporary.
+        post_patch_seg[..., 1:] *= post_patch_seg[..., 1:] > 0.2
 
-    # get hard segmentation
-    post_patch_seg /= np.sum(post_patch_seg, axis=-1)[..., np.newaxis]
+    # normalise posteriors and get hard segmentation
+    denom = np.sum(post_patch_seg, axis=-1, dtype=np.float32)
+    denom[denom == 0] = 1.0
+    post_patch_seg /= denom[..., np.newaxis]
+    del denom
+
     seg_patch = labels_segmentation[post_patch_seg.argmax(-1).astype("int32")].astype(
         "int32"
     )
 
     # postprocess parcellation
     if post_patch_parc is not None:
-        post_patch_parc = np.squeeze(post_patch_parc)
+        post_patch_parc = np.squeeze(post_patch_parc).astype(np.float32, copy=False)
         post_patch_parc = edit_volumes.crop_volume_with_idx(
             post_patch_parc, pad_idx, n_dims=3, return_copy=False
         )
         mask = (seg_patch == 3) | (seg_patch == 42)
-        post_patch_parc[..., 0] = np.ones_like(post_patch_parc[..., 0])
+        post_patch_parc[..., 0].fill(1.0)
         post_patch_parc[..., 0] = edit_volumes.mask_volume(
             post_patch_parc[..., 0], mask=mask < 0.1, return_copy=False
         )
-        post_patch_parc /= np.sum(post_patch_parc, axis=-1)[..., np.newaxis]
+        denom_parc = np.sum(post_patch_parc, axis=-1, dtype=np.float32)
+        denom_parc[denom_parc == 0] = 1.0
+        post_patch_parc /= denom_parc[..., np.newaxis]
+        del denom_parc
+
         parc_patch = labels_parcellation[
             post_patch_parc.argmax(-1).astype("int32")
         ].astype("int32")
         seg_patch[mask] = parc_patch[mask]
+        del mask, parc_patch
 
-    # paste patches back to matrix of original image size
-    if crop_idx is not None:
-        # we need to go through this because of the posteriors of the background, otherwise pad_volume would work
-        seg = np.zeros(shape=shape, dtype="int32")
-        posteriors = np.zeros(shape=[*shape, labels_segmentation.shape[0]])
-        posteriors[..., 0] = np.ones(shape)  # place background around patch
-        seg[
-            crop_idx[0] : crop_idx[3],
-            crop_idx[1] : crop_idx[4],
-            crop_idx[2] : crop_idx[5],
-        ] = seg_patch
-        posteriors[
-            crop_idx[0] : crop_idx[3],
-            crop_idx[1] : crop_idx[4],
-            crop_idx[2] : crop_idx[5],
-            :,
-        ] = post_patch_seg
-    else:
-        seg = seg_patch
-        posteriors = post_patch_seg
-
-    # align prediction back to first orientation
-    seg = edit_volumes.align_volume_to_ref(
-        seg, aff=np.eye(4), aff_ref=aff, n_dims=3, return_copy=False
-    )
-    posteriors = edit_volumes.align_volume_to_ref(
-        posteriors, np.eye(4), aff_ref=aff, n_dims=3, return_copy=False
-    )
-
-    # compute volumes
+    # Compute volumes on the cropped/post-padded posterior patch. Outside the patch is
+    # background, so this gives the same totals as summing the full pasted posterior image.
     volumes = np.sum(
-        posteriors[..., 1:], axis=tuple(range(0, len(posteriors.shape) - 1))
+        post_patch_seg[..., 1:], axis=tuple(range(0, len(post_patch_seg.shape) - 1)), dtype=np.float64
     )
     total_volume_cortex_left = np.sum(
         volumes[np.where(labels_segmentation == 3)[0] - 1]
@@ -1103,7 +1123,7 @@ def postprocess(
         volumes = np.concatenate([np.array([np.sum(volumes)]), volumes])
     if post_patch_parc is not None:
         volumes_parc = np.sum(
-            post_patch_parc[..., 1:], axis=tuple(range(0, len(posteriors.shape) - 1))
+            post_patch_parc[..., 1:], axis=tuple(range(0, len(post_patch_parc.shape) - 1)), dtype=np.float64
         )
         volumes_parc_left = volumes_parc[: int(len(volumes_parc) / 2)]
         volumes_parc_right = volumes_parc[int(len(volumes_parc) / 2) :]
@@ -1115,6 +1135,44 @@ def postprocess(
         )
         volumes = np.concatenate([volumes, volumes_parc_left, volumes_parc_right])
     volumes = np.around(volumes * np.prod(im_res), 3)
+
+    # paste patches back to matrix of original image size
+    posteriors = None
+    if crop_idx is not None:
+        seg = np.zeros(shape=shape, dtype="int32")
+        seg[
+            crop_idx[0] : crop_idx[3],
+            crop_idx[1] : crop_idx[4],
+            crop_idx[2] : crop_idx[5],
+        ] = seg_patch
+
+        if return_posteriors:
+            # Original code used np.zeros without dtype here, which allocates float64.
+            posteriors = np.zeros(
+                shape=[*shape, labels_segmentation.shape[0]],
+                dtype=post_patch_seg.dtype,
+            )
+            posteriors[..., 0].fill(1.0)  # place background around patch
+            posteriors[
+                crop_idx[0] : crop_idx[3],
+                crop_idx[1] : crop_idx[4],
+                crop_idx[2] : crop_idx[5],
+                :,
+            ] = post_patch_seg
+    else:
+        seg = seg_patch
+        if return_posteriors:
+            posteriors = post_patch_seg
+
+    # align prediction back to first orientation
+    seg = edit_volumes.align_volume_to_ref(
+        seg, aff=np.eye(4), aff_ref=aff, n_dims=3, return_copy=False
+    )
+
+    if return_posteriors:
+        posteriors = edit_volumes.align_volume_to_ref(
+            posteriors, np.eye(4), aff_ref=aff, n_dims=3, return_copy=False
+        )
 
     return seg, posteriors, volumes
 
