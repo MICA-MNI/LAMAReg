@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-LaMAR: Label Augmented Modality Agnostic Registration
+LAMAReg: Label Augmented Modality Agnostic Registration
 Command-line interface
 """
 
@@ -20,7 +20,7 @@ DEFAULT_THREADS = multiprocessing.cpu_count()
 
 
 def print_cli_help():
-    """Print a comprehensive help message for the LAMAR CLI."""
+    """Print a comprehensive help message for the LAMAReg CLI."""
     # ANSI color codes
     CYAN = Fore.CYAN
     GREEN = Fore.GREEN
@@ -44,22 +44,22 @@ def print_cli_help():
     
     {BLUE}1. FULL REGISTRATION PIPELINE{RESET}
       Parcellate both input images, register them, and apply the transformation:
-      lamar {GREEN}register{RESET} [options]
+      lamareg {GREEN}register{RESET} [options]
       
     {BLUE}2. GENERATE WARPFIELD ONLY{RESET}
       Create warpfields without applying them to the input image:
-      lamar {GREEN}generate-warpfield{RESET} [options]
+      lamareg {GREEN}generate-warpfield{RESET} [options]
       
     {BLUE}3. APPLY EXISTING WARPFIELD{RESET}
       Apply previously created warpfields to an input image:
-      lamar {GREEN}apply-warpfield{RESET} [options]
+      lamareg {GREEN}apply-warpfield{RESET} [options]
       
     {BLUE}4. DIRECT TOOL ACCESS{RESET}
       Run individual components directly:
-      lamar {GREEN}synthseg{RESET} [options]     : Run SynthSeg brain parcellation
-      lamar {GREEN}coregister{RESET} [options]   : Run ANTs coregistration
-      lamar {GREEN}apply-warp{RESET} [options]   : Apply transformations
-      lamar {GREEN}dice-compare{RESET} [options] : Calculate Dice similarity coefficient
+      lamareg {GREEN}synthseg{RESET} [options]     : Run SynthSeg brain parcellation
+      lamareg {GREEN}coregister{RESET} [options]   : Run ANTs coregistration
+      lamareg {GREEN}apply-warp{RESET} [options]   : Apply transformations
+      lamareg {GREEN}dice-compare{RESET} [options] : Calculate Dice similarity coefficient
 
     {CYAN}{BOLD}──────────────────── FULL REGISTRATION ────────────────────{RESET}
     
@@ -110,7 +110,7 @@ def print_cli_help():
     {CYAN}{BOLD}─────────────────── EXAMPLE USAGE ───────────────────────{RESET}
 
     {BLUE}# Basic registration (two-stage robust mode, default):{RESET}
-    lamar {GREEN}register{RESET} \\
+    lamareg {GREEN}register{RESET} \\
       {YELLOW}--moving{RESET} sub-001_dwi.nii.gz \\
       {YELLOW}--fixed{RESET} sub-001_T1w.nii.gz \\
       {YELLOW}--output{RESET} sub-001_dwi_in_T1w.nii.gz \\
@@ -125,7 +125,7 @@ def print_cli_help():
       {YELLOW}--threads{RESET} 4 
       
     {BLUE}# Single-stage registration (faster, less accurate):{RESET}
-    lamar {GREEN}register{RESET} \\
+    lamareg {GREEN}register{RESET} \\
       {YELLOW}--moving{RESET} subject_flair.nii.gz \\
       {YELLOW}--fixed{RESET} subject_t1w.nii.gz \\
       {YELLOW}--output{RESET} registered_flair.nii.gz \\
@@ -137,11 +137,11 @@ def print_cli_help():
       {YELLOW}--disable-robust{RESET}
 
     {BLUE}# Generate parcellations separately:{RESET}
-    lamar {GREEN}synthseg{RESET} {YELLOW}--i{RESET} subject_t1w.nii.gz {YELLOW}--o{RESET} t1w_parcellation.nii.gz {YELLOW}--parc{RESET}
-    lamar {GREEN}synthseg{RESET} {YELLOW}--i{RESET} subject_flair.nii.gz {YELLOW}--o{RESET} flair_parcellation.nii.gz {YELLOW}--parc{RESET}
+    lamareg {GREEN}synthseg{RESET} {YELLOW}--i{RESET} subject_t1w.nii.gz {YELLOW}--o{RESET} t1w_parcellation.nii.gz {YELLOW}--parc{RESET}
+    lamareg {GREEN}synthseg{RESET} {YELLOW}--i{RESET} subject_flair.nii.gz {YELLOW}--o{RESET} flair_parcellation.nii.gz {YELLOW}--parc{RESET}
 
     {BLUE}# Register using existing parcellations:{RESET}
-    lamar {GREEN}register{RESET} \\
+    lamareg {GREEN}register{RESET} \\
       {YELLOW}--moving{RESET} subject_flair.nii.gz \\
       {YELLOW}--fixed{RESET} subject_t1w.nii.gz \\
       {YELLOW}--output{RESET} registered_flair.nii.gz \\
@@ -152,7 +152,7 @@ def print_cli_help():
       {YELLOW}--warpfield{RESET} flair_to_t1w_warp.nii.gz
 
     {BLUE}# Apply existing transforms (robust mode with two warpfields):{RESET}
-    lamar {GREEN}apply-warpfield{RESET} \\
+    lamareg {GREEN}apply-warpfield{RESET} \\
       {YELLOW}--moving{RESET} dwi_segmentation.nii.gz \\
       {YELLOW}--fixed{RESET} T1w_reference.nii.gz \\
       {YELLOW}--output{RESET} dwi_seg_in_T1w.nii.gz \\
@@ -162,7 +162,7 @@ def print_cli_help():
 
     {CYAN}{BOLD}────────────────────────── NOTES ───────────────────────{RESET}
     
-    {MAGENTA}•{RESET} LAMAR works with any MRI modality combination
+    {MAGENTA}•{RESET} LAMAReg works with any MRI modality combination
     {MAGENTA}•{RESET} If parcellation files already exist, they will be used directly
     {MAGENTA}•{RESET} All output files need explicit paths to ensure deterministic behavior
     {MAGENTA}•{RESET} The transforms can be reused with the apply-warpfield command
@@ -200,9 +200,9 @@ def print_cli_help():
 
 
 def main():
-    """Main entry point for the LAMAR CLI."""
+    """Main entry point for the LAMAReg CLI."""
     parser = argparse.ArgumentParser(
-        description="LAMAR: Label Augmented Modality Agnostic Registration"
+        description="LAMAReg: Label Augmented Modality Agnostic Registration"
     )
 
     # Create subparsers for different commands
