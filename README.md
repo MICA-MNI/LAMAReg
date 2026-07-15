@@ -10,7 +10,7 @@
 
 </div>
 
-We introduced a novel approach for more accurate registration between modalities. This python based workflow combines deep learning-based segmentation and numerical solutions (ANTs) to generate precise warpfields, even for modalities with low signal-to-noise ratio, signal dropout and strong geometric distortions, such as diffusion MRI and fMRI acquisitions. 
+We introduced a novel approach for more accurate registration between modalities. This python based workflow combines deep learning-based segmentation and numerical solutions (ANTs) to generate precise warpfields, even for modalities with low signal-to-noise ratio, signal dropout and strong geometric distortions, such as diffusion MRI and fMRI acquisitions. LAMAReg is implemented in a lightweight end-to-end T1/FLAIR/DWI pipeline as a seperate pip installable package ([MICAFlow](https://github.com/MICA-MNI/MICAFlow)).
 
 ![lamar_workflow](https://raw.githubusercontent.com/MICA-MNI/LAMAReg/main/docs/workflow.png)
 
