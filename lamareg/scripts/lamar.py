@@ -48,7 +48,8 @@ def lamareg(
     secondary_warp_file=None,
     inverse_secondary_warp_file=None,
     verbose=False,
-    compose=False
+    compose=False,
+    interpolation="linear",
     
 ):
     """
@@ -489,6 +490,7 @@ def lamareg(
                 affine_file=affine_file,
                 warp_file=warp_file,
                 out_file=output_image,
+                interpolation=interpolation,
                 secondary_warp=secondary_warp_file,
                 inverse=inverse,
                 verbose=verbose
@@ -577,6 +579,11 @@ def main():
     parser.add_argument("--skip-qc", action="store_true", help="Skip QC CSV generation")
     parser.add_argument("--disable-robust", action="store_true", help="Disable robust second-stage registration")
     parser.add_argument("--inverse", action="store_true", help="Whether to reverse the order of the transforms (warpfield first, then affine)")
+    parser.add_argument(
+        "--interpolation",
+        default="linear",
+        help="Interpolation method used when applying transforms (default: linear)",
+    )
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
     parser.add_argument("--compose", action="store_true", help="Compose warp fields instead of applying sequentially")
     args = parser.parse_args()
@@ -617,6 +624,7 @@ def main():
         inverse=args.inverse,
         secondary_warp_file=args.secondary_warpfield,
         inverse_secondary_warp_file=args.inverse_secondary_warpfield,
+        interpolation=args.interpolation,
         verbose=args.verbose,
         compose=args.compose
     )

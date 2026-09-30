@@ -105,6 +105,8 @@ def print_cli_help():
     {BLUE}# Optional Arguments:{RESET}
       {YELLOW}--threads{RESET} N         : Number of threads to use (default: all cores)
       {YELLOW}--secondary-warpfield{RESET} PATH : Path to secondary warp (for robust mode)
+      {YELLOW}--interpolation{RESET} METHOD     : Interpolation method (default: linear)
+                                      Use nearestNeighbor for labels/segmentations
       {YELLOW}--inverse{RESET}                 : Invert transform order (warp then affine)
 
     {CYAN}{BOLD}─────────────────── EXAMPLE USAGE ───────────────────────{RESET}
@@ -406,6 +408,26 @@ def main():
         help="Number of threads to use for transformation (default: all cores)",
     )
     apply_parser.add_argument(
+        "--interpolation",
+        default="linear",
+        choices=[
+            "linear",
+            "nearestNeighbor",
+            "multiLabel",
+            "bSpline",
+            "gaussian",
+            "cosineWindowedSinc",
+            "welchWindowedSinc",
+            "hammingWindowedSinc",
+            "lanczosWindowedSinc",
+            "genericLabel",
+        ],
+        help=(
+            "Interpolation method (default: linear). Use nearestNeighbor or "
+            "genericLabel for label images."
+        ),
+    )
+    apply_parser.add_argument(
         "--inverse",
         action="store_true",
         help="Whether to invert the order of the affine and warpfield (warpfield first, then affine)"
@@ -536,6 +558,7 @@ def main():
             warp_file=args.warpfield,
             secondary_warp_file=args.secondary_warpfield,
             threads=args.threads,
+            interpolation=args.interpolation,
             inverse=args.inverse,
             verbose=args.verbose
         )
